@@ -273,6 +273,23 @@ ${baseSafety}
   }
 
   /**
+   * Test połączenia z modelem Gemini (Ping)
+   * Zwraca tekst odpowiedzi modelu
+   */
+  async testConnection(options = {}) {
+    const activeModel = options.model || this.getModel();
+    return await this.callGemini(
+      "Odpowiedz w jednym krótkim zdaniu: Połączenie testowe z modelem Gemini powiodło się.",
+      {
+        temperature: 0.1,
+        maxOutputTokens: 60,
+        model: activeModel,
+        ...options
+      }
+    );
+  }
+
+  /**
    * Główna metoda wysyłająca zapytanie do Google Generative AI REST API
    * Zoptymalizowana pod determinizm inżynierski (temp: 0.1, topP: 0.8, maxOutputTokens: 700)
    */

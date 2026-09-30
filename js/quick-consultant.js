@@ -1048,13 +1048,17 @@
         const resultDiv = document.getElementById('consultant-test-result');
         if (!resultDiv || !window.geminiService) return;
 
-        resultDiv.innerHTML = `<span style="color: var(--accent-cyan);">⏳ Testowanie połączenia z Gemini API...</span>`;
+        const activeModel = window.geminiService.getModel();
+        resultDiv.innerHTML = `<span style="color: var(--accent-cyan);">⏳ Testowanie połączenia z modelem ${escapeHtml(activeModel)}...</span>`;
 
         try {
-            const isOk = await window.geminiService.testConnection();
-            if (isOk) {
-                resultDiv.innerHTML = `<span style="color: var(--accent-teal);">✅ Połączenie aktywne! Model odpowiada prawidłowo.</span>`;
+            const reply = await window.geminiService.testConnection();
+            if (reply) {
+                resultDiv.innerHTML = `<span style="color: var(--accent-teal);">✅ Połączenie aktywne z modelem ${escapeHtml(activeModel)}! Odpowiedź: "${escapeHtml(reply.trim())}"</span>`;
                 updateConsultantGeminiStatusUI();
+                if (typeof showToast === 'function') {
+                    showToast(`Połączenie z ${activeModel} aktywne! ⚡`, 'success');
+                }
             } else {
                 resultDiv.innerHTML = `<span style="color: var(--accent-rose);">❌ Błąd testu połączenia.</span>`;
             }
