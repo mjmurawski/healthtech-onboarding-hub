@@ -225,11 +225,22 @@ ${baseSafety}
   }
 
   setApiKey(key) {
-    if (!key || !key.trim()) {
+    if (!key) {
       this.removeApiKey();
       return;
     }
-    window.localStorage.setItem(this.storageKey, key.trim());
+    let cleaned = String(key)
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim()
+      .replace(/^["'`]|["'`]$/g, '')
+      .replace(/^Bearer\s+/i, '')
+      .trim();
+
+    if (!cleaned) {
+      this.removeApiKey();
+      return;
+    }
+    window.localStorage.setItem(this.storageKey, cleaned);
   }
 
   removeApiKey() {
