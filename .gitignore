@@ -1,0 +1,17 @@
+# System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temp & logs
+*.log
+maxmemory
+
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node
+node_modules/

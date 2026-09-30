@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="pl" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HealthTech Onboarding Hub | System Wdrożeniowy Inżyniera Ochrony Zdrowia</title>
+  
+  <!-- Czcionki Google -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Menu Boczne (Sidebar) -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-badge">HT</div>
+        <div class="logo-text">
+          <h2>HealthTech Hub</h2>
+          <span>HIS • LIS • RIS • PACS</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section-title">Główne Centrum</div>
+        <div class="nav-item active" data-tab="tab-dashboard">
+          <span class="nav-icon">📊</span>
+          <span>Pulpit Wdrożeniowy</span>
+        </div>
+
+        <div class="nav-section-title">Wiedza Techniczna & Integracje</div>
+        <div class="nav-item" data-tab="tab-migration">
+          <span class="nav-icon">🔄</span>
+          <span>Firebird ➔ PostgreSQL</span>
+        </div>
+        <div class="nav-item" data-tab="tab-hl7-fhir">
+          <span class="nav-icon">🏥</span>
+          <span>Przewodnik HL7 / FHIR</span>
+        </div>
+        <div class="nav-item" data-tab="tab-hl7-inspector">
+          <span class="nav-icon">🔬</span>
+          <span>Narzędzie: Inspektor HL7</span>
+        </div>
+        <div class="nav-item" data-tab="tab-linux-assistant">
+          <span class="nav-icon">🐧</span>
+          <span>Narzędzie: Asystent Konsoli Linux</span>
+        </div>
+
+        <div class="nav-section-title">Organizacja & Pierwsze Dni</div>
+        <div class="nav-item" data-tab="tab-doc-template">
+          <span class="nav-icon">📝</span>
+          <span>Szablon Dokumentacji</span>
+        </div>
+        <div class="nav-item" data-tab="tab-orientation">
+          <span class="nav-icon">❓</span>
+          <span>Pytania Orientacyjne</span>
+        </div>
+        <div class="nav-item" data-tab="tab-checklist">
+          <span class="nav-icon">✅</span>
+          <span>Checklist Tygodnia 1</span>
+          <span class="nav-badge" id="badge-checklist">0/15</span>
+        </div>
+
+        <div class="nav-section-title">🆕 Specjalistyczne Narzędzia IT</div>
+        <div class="nav-item" data-tab="tab-systems-specialist">
+          <span class="nav-icon">🏥</span>
+          <span>LIS / eKrew / PatExpert / Genetyka</span>
+        </div>
+        <div class="nav-item" data-tab="tab-stack-decoder">
+          <span class="nav-icon">🔍</span>
+          <span>Dekoder Stack Trace'ów</span>
+        </div>
+        <div class="nav-item" data-tab="tab-sql-generator">
+          <span class="nav-icon">🗄️</span>
+          <span>Generator SQL Diagnostyczny</span>
+        </div>
+        <div class="nav-item" data-tab="tab-patexpert-docs">
+          <span class="nav-icon">📝</span>
+          <span>Tworzenie Dokumentacji (PatExpert)</span>
+        </div>
+        <div class="nav-item" data-tab="tab-quick-consultant">
+          <span class="nav-icon">⚡</span>
+          <span>Szybki Konsultant IT (Dev & Med)</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="exportHubData()" title="Eksportuj stan do pliku JSON">💾 Kopia JSON</button>
+          <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="importHubData()" title="Wczytaj kopię stanu">📂 Wczytaj</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Główny Obszar Treści -->
+    <main class="main-content">
+      
+      <!-- Górny Pasek Nawigacji -->
+      <header class="top-navbar">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <button class="btn btn-icon" id="mobile-menu-toggle" style="display: none;">☰</button>
+          <div class="navbar-breadcrumbs">
+            <span class="crumb-main">HealthTech Hub</span>
+            <span class="crumb-sep">/</span>
+            <span class="crumb-active">Pulpit Wdrożeniowy</span>
+          </div>
+        </div>
+
+        <div class="navbar-actions">
+          <button class="btn btn-secondary btn-sm" id="quick-notes-toggle">
+            ✏️ Szybkie Notatki
+          </button>
+          <button class="btn btn-icon" id="theme-toggle-btn" title="Przełącz motyw">
+            ☀️
+          </button>
+        </div>
+      </header>
+
+      <!-- Ciało Zakładek -->
+      <div class="content-body">
+        
+        <!-- ================= TAB 0: DASHBOARD ================= -->
+        <div class="tab-pane active" id="tab-dashboard">
+          <div class="module-header">
+            <div class="module-tag">Centrum Dowodzenia</div>
+            <h1>Witaj w HealthTech Onboarding Hub</h1>
+            <p>
+              Twój osobisty asystent wdrożenia w roli programisty i inżyniera wsparcia systemów medycznych.
+              Wszystkie zadania, ściągawki i notatki są zapisywane automatycznie w pamięci przeglądarki.
+            </p>
+          </div>
+
+          <div class="grid-dashboard">
+            <div>
+              <div class="card">
+                <div class="card-header">
+                  <h3>🚀 Centrum Operacyjne & Wsparcie Inżynierskie</h3>
+                </div>
+                <p style="font-size: 0.92rem; color: var(--text-secondary); margin-bottom: 16px;">
+                  Platforma wsparcia inżynierskiego i onboardingowego dla systemów medycznych: <strong>LIS</strong>, <strong>eKrew</strong>, <strong>PatExpert</strong> oraz <strong>Genetyka</strong>.
+                  Skorzystaj z dedykowanych asystentów AI, bazy procedur diagnostycznych i checklisty wdrożeniowej.
+                </p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                  <button class="btn btn-primary btn-sm" data-switch-tab="tab-systems-specialist">🏥 Moduły 4 Systemów</button>
+                  <button class="btn btn-secondary btn-sm" data-switch-tab="tab-stack-decoder">🔍 Dekoder Błędów</button>
+                  <button class="btn btn-secondary btn-sm" data-switch-tab="tab-checklist">✅ Checklist Tygodnia 1</button>
+                </div>
+              </div>
+
+              <!-- Szybkie kafelki nawigacji -->
+              <div id="dash-quick-actions"></div>
+            </div>
+
+            <!-- Widget Wskaźnika Gotowości -->
+            <div>
+              <div class="readiness-widget">
+                <h4 style="font-size: 1rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
+                  HealthTech Readiness
+                </h4>
+                
+                <div class="readiness-circle">
+                  <svg viewBox="0 0 130 130">
+                    <circle class="bg-ring" cx="65" cy="65" r="60"></circle>
+                    <circle class="progress-ring" id="readiness-progress-ring" cx="65" cy="65" r="60"></circle>
+                  </svg>
+                  <div class="readiness-val" id="readiness-score-val">0%</div>
+                </div>
+
+                <div class="readiness-status">Postęp Wdrożenia Operacyjnego</div>
+                <p style="font-size: 0.8rem; color: var(--text-muted);">
+                  Wskaźnik odzwierciedla realizację kluczowych zadań checklisty pierwszego tygodnia pracy.
+                </p>
+
+                <div class="metric-bar-group">
+                  <div class="metric-bar-item">
+                    <div class="metric-bar-label">
+                      <span>Checklist 1. Tygodnia:</span>
+                      <strong id="metric-checklist-label">0%</strong>
+                    </div>
+                    <div class="progress-track">
+                      <div class="progress-fill fill-amber" id="metric-checklist-fill" style="width: 0%;"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB: MIGRACJA FIREBIRD -> POSTGRES ================= -->
+        <div class="tab-pane" id="tab-migration">
+          <div class="module-header">
+            <div class="module-tag">Baza Wiedzy: Migracja</div>
+            <h1>Praktyczny Cheat-sheet: Migracja Firebird ➔ PostgreSQL</h1>
+            <p>
+              Kompilacja kluczowych różnic architektonicznych, mapowania typów danych, pułapek transakcyjnych,
+              wzorców zapytań SQL oraz gotowego skryptu ETL w Pythonie do migracji partiami.
+            </p>
+          </div>
+
+          <div id="migration-content-pane"></div>
+        </div>
+
+        <!-- ================= TAB: PRZEWODNIK HL7 & FHIR ================= -->
+        <div class="tab-pane" id="tab-hl7-fhir">
+          <div class="module-header">
+            <div class="module-tag">Standardy Medyczne</div>
+            <h1>Przewodnik HL7 v2 & FHIR + Słownik „Mów jak zespół”</h1>
+            <p>
+              Esencja wiedzy o standardach medycznych: anatomia ramek MLLP, przepływ komunikatów ADT/ORM/ORU,
+              zasoby FHIR w JSON oraz interaktywny słownik pojęć branżowych.
+            </p>
+          </div>
+
+          <div id="hl7-fhir-content"></div>
+        </div>
+
+        <!-- ================= TAB: INSPEKTOR HL7 ================= -->
+        <div class="tab-pane" id="tab-hl7-inspector">
+          <div class="module-header">
+            <div class="module-tag">Narzędzie Interaktywne</div>
+            <h1>Inspektor i Symulator Komunikatów HL7 v2</h1>
+            <p>
+              Podgląd na żywo podziału na segmenty, pola i komponenty oraz automatyczny generator potwierdzeń ACK.
+            </p>
+          </div>
+
+          <div id="hl7-inspector-container"></div>
+        </div>
+
+        <!-- ================= TAB: ASYSTENT KONSOLI LINUX ================= -->
+        <div class="tab-pane" id="tab-linux-assistant">
+          <div class="module-header">
+            <div class="module-tag">Narzędzie Diagnostyczne</div>
+            <h1>🐧 Asystent Konsoli Linux & Generator Rozwiązań</h1>
+            <p>
+              Wklej dowolny problem, kod błędu z logów lub wybierz typowy scenariusz ze środowiska szpitalnego.
+              System natychmiast wygeneruje diagnozę, procedurę krok po kroku oraz bezpieczne polecenia Bash gotowe do skopiowania.
+            </p>
+          </div>
+
+          <div id="linux-assistant-container"></div>
+        </div>
+
+        <!-- ================= TAB: SZABLON DOKUMENTACJI ================= -->
+        <div class="tab-pane" id="tab-doc-template">
+          <div class="module-header">
+            <div class="module-tag">Dokumentacja Zmiany</div>
+            <h1>Generator Szablonu Dokumentacji Integracyjnej / Zmiany</h1>
+            <p>
+              Wypełnij sekcje bezpośrednio w przeglądarce. Aplikacja natychmiast przygotuje sformatowany dokument Markdown
+              zgodny ze standardami inżynierii medycznej.
+            </p>
+          </div>
+
+          <div id="doc-template-form-container"></div>
+        </div>
+
+        <!-- ================= TAB: PYTANIA ORIENTACYJNE ================= -->
+        <div class="tab-pane" id="tab-orientation">
+          <div class="module-header">
+            <div class="module-tag">Wdrożenie Zespołowe</div>
+            <h1>Lista Pytań Orientacyjnych do Zespołu</h1>
+            <p>
+              Strukturalny zestaw pytań do zadania przełożonemu, mentorowi i architektom w pierwszych dniach pracy.
+              Odznaczaj zadane pytania i notuj odpowiedzi bezpośrednio w polach notatek.
+            </p>
+          </div>
+
+          <div id="orientation-questions-container"></div>
+        </div>
+
+        <!-- ================= TAB: CHECKLIST PIERWSZEGO TYGODNIA ================= -->
+        <div class="tab-pane" id="tab-checklist">
+          <div class="module-header">
+            <div class="module-tag">Checklist Wdrożeniowy</div>
+            <h1>Checklist Pierwszego Tygodnia w Pracy (Dni 1–5)</h1>
+            <p>
+              Kompletny plan działania krok po kroku: od odbioru sprzętu i kwestii RODO, przez konfigurację środowiska,
+              aż po pierwsze zadanie (MR/PR) i podsumowanie tygodnia z mentorem.
+            </p>
+          </div>
+
+          <div id="first-week-checklist-container"></div>
+        </div>
+
+        <!-- ================= TAB: SPECJALISTA SYSTEMÓW MEDYCZNYCH ================= -->
+        <div class="tab-pane" id="tab-systems-specialist">
+          <div class="module-header">
+            <div class="module-tag">Narzędzie Specjalistyczne</div>
+            <h1>🏥 Specjalista Systemów Medycznych</h1>
+            <p>
+              Interaktywna baza wiedzy dla 4 systemów z Twojego zakresu pracy: LIS (Laboratorium), eKrew (Bank Krwi),
+              PatExpert (Patomorfologia) i Genetyka. Scenariusze diagnostyczne, kroki naprawcze
+              i gotowe zapytania SQL diagnostyczne.
+            </p>
+          </div>
+          <div id="systems-specialist-container"></div>
+        </div>
+
+        <!-- ================= TAB: DEKODER STACK TRACE'ÓW ================= -->
+        <div class="tab-pane" id="tab-stack-decoder">
+          <div class="module-header">
+            <div class="module-tag">Narzędzie Diagnostyczne</div>
+            <h1>🔍 Dekoder Stack Trace'ów i Błędów Aplikacyjnych</h1>
+            <p>
+              Wklej surowy stack trace z Java, .NET (C#) lub Delphi, lub komunikat błędu Oracle / PostgreSQL.
+              System natychmiast zwróci kontekst biznesowy, prawdopodobną przyczynę i bezpieczne zapytanie SQL
+              do weryfikacji stanu bazy danych.
+            </p>
+          </div>
+          <div id="stack-decoder-container"></div>
+        </div>
+
+        <!-- ================= TAB: GENERATOR SQL DIAGNOSTYCZNY ================= -->
+        <div class="tab-pane" id="tab-sql-generator">
+          <div class="module-header">
+            <div class="module-tag">Narzędzie SQL</div>
+            <h1>🗄️ Generator Bezpiecznych Zapytań SQL</h1>
+            <p>
+              Generuj diagnostyczne zapytania SELECT z szablonów (offline), twórz bezpieczne szablony UPDATE
+              opakowane w transakcję testową z domyślnym ROLLBACK, lub opisz problem w języku naturalnym
+              i pozwól Gemini AI wygenerować gotowy SELECT.
+            </p>
+          </div>
+          <div id="sql-generator-container"></div>
+        </div>
+
+        <!-- ================= TAB: TWORZENIE DOKUMENTACJI PATEXPERT ================= -->
+        <div class="tab-pane" id="tab-patexpert-docs">
+          <div class="module-header">
+            <div class="module-tag">Weryfikacja Powdrożeniowa &amp; QA</div>
+            <h1>📝 Tworzenie Dokumentacji i Testów PatExpert</h1>
+            <p>
+              Dedykowany Agent AI wyspecjalizowany w testach funkcjonalnych, weryfikacji powdrożeniowej i dokumentacji technicznej
+              dla systemu PatExpert (pracownia histopatologiczna). Przekształcaj informacje o patchach i poprawkach w gotowe
+              scenariusze testowe (Test Case), testy regresji oraz instrukcje postępowania dla I linii wsparcia.
+            </p>
+          </div>
+          <div id="patexpert-docs-container"></div>
+        </div>
+
+        <!-- ================= TAB: SZYBKI KONSULTANT IT ================= -->
+        <div class="tab-pane" id="tab-quick-consultant">
+          <div class="module-header">
+            <div class="module-tag">Asystent Błyskawiczny</div>
+            <h1>⚡ Szybki Konsultant IT (Programowanie / Bazy Danych / Systemy Medyczne)</h1>
+            <p>
+              Dedykowany agent AI do błyskawicznych, ultra-zwięzłych odpowiedzi technicznych.
+              Same konkrety: gotowy kod, komendy Bash, zapytania SQL i kluczowe uwagi diagnostyczne od pierwszego zdania.
+            </p>
+          </div>
+          <div id="quick-consultant-container"></div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Szuflada Szybkich Notatek (Quick Notes Drawer) -->
+    <div class="notes-drawer" id="quick-notes-drawer">
+      <div class="notes-drawer-header">
+        <h4>📝 Szybkie Notatki</h4>
+        <button class="btn btn-icon btn-sm" id="close-notes-drawer">✕</button>
+      </div>
+      <div class="notes-drawer-body">
+        <textarea 
+          class="notes-textarea" 
+          id="quick-notes-textarea" 
+          placeholder="Wpisz podręczne notatki ze spotkań, numery portów MLLP, loginy stagingu..."
+        ></textarea>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px;">
+          💾 Notatki zapisują się automatycznie w pamięci przeglądarki.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Skrypty Aplikacji -->
+  <script src="js/data.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/hl7-inspector.js"></script>
+  <script src="js/linux-assistant.js"></script>
+  <script src="js/gemini-service.js"></script>
+  <!-- Nowe moduły specjalistyczne -->
+  <script src="js/systems-specialist.js"></script>
+  <script src="js/stack-decoder.js"></script>
+  <script src="js/sql-generator.js"></script>
+  <script src="js/patexpert-docs.js"></script>
+  <script src="js/quick-consultant.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
