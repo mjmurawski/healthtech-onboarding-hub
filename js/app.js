@@ -37,6 +37,9 @@ function initApp() {
   if (typeof window.renderQuickConsultantModule === 'function') {
     window.renderQuickConsultantModule();
   }
+  if (typeof window.renderAnsibleSREModule === 'function') {
+    window.renderAnsibleSREModule();
+  }
 
   // Subskrypcja zmian stanu
   if (window.appState && typeof window.appState.subscribe === 'function') {
@@ -288,6 +291,13 @@ function renderDashboard() {
           <h4 style="color: var(--accent-cyan);">Szybki Konsultant IT (Dev & Med)</h4>
           <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 6px;">
             Błyskawiczny agent AI: Programowanie, Bazy Danych i Systemy Medyczne. Same konkrety, gotowy kod i zero lania wody.
+          </p>
+        </div>
+        <div class="card" style="cursor: pointer; border-color: #8338ec; border-width: 1px; border-style: solid;" data-switch-tab="tab-ansible-sre">
+          <div style="font-size: 1.8rem; margin-bottom: 10px;">🤖</div>
+          <h4 style="color: #8338ec;">Automatyzacja SRE & Ansible</h4>
+          <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 6px;">
+            Katalog idempotentnych playbooków SRE, role, inventory, hybrydowe skrypty Python + Bash, parser wyników PLAY RECAP i generator automatyzacji.
           </p>
         </div>
       </div>
@@ -2041,6 +2051,7 @@ const ALL_SYNC_MODEL_SELECT_IDS = [
   'sqlgen-gemini-config-model-select',
   'sqlgen-pilot-inline-model-select',
   'consultant-gemini-model-select',
+  'ansible-gemini-model-select',
   'gemini-model-select'
 ];
 

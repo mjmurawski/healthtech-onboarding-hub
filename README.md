@@ -92,6 +92,50 @@ Aplikacja jest w 100% **samowystarczalna (Single Page Application - SPA)**. Nie 
 ### 8. ✅ Checklist Pierwszego Tygodnia (Dni 1–5)
 - Dzień po dniu: zadania organizacyjne, konfiguracja IDE i Dockera, pierwszy testowy komunikat MLLP, realizacja pierwszego zadania (*Good First Issue*) i podsumowanie tygodnia z mentorem.
 
+### 9. 🤖 Centrum Automatyzacji SRE & Ansible (Site Reliability Engineering)
+Zaprojektowane pod kątem transformacji zespołu w kierunku **SRE ze wsparciem aplikacyjnym**, z naciskiem na **automatyzację, powtarzalność i stabilność**:
+- **Katalog Idempotentnych Playbooków SRE:**
+  - `psql_maintenance`: PostgreSQL Healthcheck, VACUUM i bezpieczne zamykanie wycieków połączeń (*idle-in-transaction*).
+  - `firebird_ipc_heal`: Samonaprawa menedżera blokad Firebird (błędy `semop`), czyszczenie semaforów IPC z obowiązkową kopią binarną (`cp -a`).
+  - `nfs_pacs_heal`: Samoleczenie zawieszonego montażu NFS dla archiwum PACS i skanów WSI (`umount -l -f`, weryfikacja RPC, canary write probe).
+  - `mllp_daemon_guard`: Monitoring i autorestart demonów MLLP (HL7 v2 na porcie 2575) z zaporą UFW zawężoną per IP analizatora.
+  - `disk_docker_purge`: Bezpieczne odzyskiwanie przestrzeni dyskowej (rotacja journalctl, truncate logów `*-json.log` Dockera z ochroną baz danych i konfiguracji).
+  - `patexpert_hotfix_deploy`: Wdrożenia patchów w architekturze `block ... rescue ... always` z testem dymnym REST i automatycznym rollbackiem.
+- **Zasada Safe by Default:**
+  - Wymuszona obsługa `--check` (dry-run) oraz `--diff` dla wszystkich playbooków.
+  - Jawna konfiguracja zmiennych (`extra_vars` / `-e`) bez ukrytego stanu.
+- **Hybryda Python + Bash:**
+  - Dedykowane skrypty pomocnicze wywoływane przez zadania Ansible:
+    - `sre_mllp_probe.py`: sonda gniazda HL7 MLLP z timeoutem i formatowaniem JSON dla Ansible.
+    - `sre_pg_pool_guard.py`: monitor wycieków transakcji PostgreSQL.
+    - `safe_docker_vacuum.sh`: skrypt Bash z `set -euo pipefail` i selektywnym zerowaniem logów kontenerów.
+    - `firebird_safe_reset.sh`: bezpieczny reset semaforów IPC.
+- **Parser i Diagnosta PLAY RECAP:**
+  - Natychmiastowe parsowanie zrzutów z terminala CLI / AWX / GitLab CI.
+  - Wykrywanie hostów `ok`, `changed`, `unreachable`, `failed`.
+  - Automatyczna diagnoza SRE root-cause i generowanie komendy naprawczej.
+  - Eksport 1-click do Bazy Runbooków (`tags: ['SRE', 'ANSIBLE', 'AUTOMATION']`).
+- **Generator Playbooków AI (Gemini):**
+  - Generowanie nowych playbooków na podstawie opisu procedury w języku naturalnym z zachowaniem rygoru idempotentności i obsługi błędów.
+
+---
+
+## 🚀 Jak pracować z Ansible i nowym modułem SRE?
+
+1. **Uruchomienie w przeglądarce:**
+   - Otwórz zakładkę `🤖 Automatyzacja SRE & Ansible` w menu bocznym.
+2. **Uruchamianie Playbooków z CLI:**
+   - Skopiuj wygenerowane polecenie z flagą `--check` (bezpieczny test bez wprowadzania zmian):
+     ```bash
+     ansible-playbook -i inventory.ini psql_maintenance.yml --check --diff
+     ```
+   - Po zweryfikowaniu wyników w trybie testowym usuń `--check`, aby wprowadzić pożądany stan:
+     ```bash
+     ansible-playbook -i inventory.ini psql_maintenance.yml --diff
+     ```
+3. **Analiza wyników i rozwiązywanie problemów:**
+   - Wklej wynik wykonania do podzakładki **Parser Wyników PLAY RECAP** — moduł wskaże błędy timeoutów, odmowy dostępu SSH lub kody wyjścia i pozwoli zapisać procedurę do Bazy Runbooków.
+
 ---
 
 ## 🛠️ Funkcje Dodatkowe
