@@ -258,5 +258,63 @@ global.navigator = {
   assert.strictEqual(modelSelect.value, 'gemini-3.8-flash-high', 'Selektor modelu w module Ansible musi być zsynchronizowany');
   console.log('✅ INTEGRACJA: Selektor modelu AI dla automatyzacji SRE jest w 100% zsynchronizowany z Hubem');
 
-  console.log('\n🎉 WSZYSTKIE 7 TESTÓW MODUŁU AUTOMATYZACJI SRE & ANSIBLE ZALICZONE Z SUKCESEM (100%)!');
+  console.log('\n=== TEST 8: Weryfikacja 11 Modeli Gemini w Module SRE ===');
+  const sreModels = window.GEMINI_MODELS_SRE;
+  assert(Array.isArray(sreModels), 'GEMINI_MODELS_SRE musi być tablicą');
+  assert.strictEqual(sreModels.length, 11, `Oczekiwano dokładnie 11 modeli Gemini, znaleziono: ${sreModels.length}`);
+  
+  const expectedModelValues = [
+    'gemini-3.5-flash',
+    'gemini-2.5-flash',
+    'gemini-3.7-flash',
+    'gemini-3.8-flash-high',
+    'gemini-3.1-pro-preview',
+    'gemini-3.5-flash-high',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-pro',
+    'gemini-2.0-flash-001'
+  ];
+  expectedModelValues.forEach(val => {
+    const found = sreModels.find(m => m.value === val);
+    assert(found, `Model ${val} musi znajdować się na liście modeli SRE`);
+  });
+  console.log('✅ MODELE: Wszystkie 11 modeli Gemini są poprawnie skonfigurowane w module SRE');
+
+  console.log('\n=== TEST 9: Weryfikacja Zapisywania Klucza API w Module SRE (saveAnsibleApiKeyUI) ===');
+  // Symulacja pola input klucza API w DOM
+  const apiKeyInput = document.getElementById('ansible-api-key-input');
+  apiKeyInput.value = 'AIzaSyFakeTestKeyForAnsibleSRE12345';
+  
+  // Wywołanie zapisu klucza
+  window.saveAnsibleApiKeyUI();
+  
+  // Weryfikacja czy klucz trafił do geminiService i localStorage
+  assert.strictEqual(window.geminiService.getApiKey(), 'AIzaSyFakeTestKeyForAnsibleSRE12345', 'Klucz API musi być zapisany w geminiService');
+  assert.strictEqual(window.geminiService.hasApiKey(), true, 'geminiService.hasApiKey() musi zwracać true');
+  console.log('✅ ZAPIS KLUCZA: saveAnsibleApiKeyUI pomyślnie zapisuje klucz API w geminiService');
+
+  console.log('\n=== TEST 10: Weryfikacja Testu Połączenia Ping (testAnsibleConnectionUI) ===');
+  // Mock metody testConnection w geminiService
+  const originalTestConn = window.geminiService.testConnection;
+  window.geminiService.testConnection = async () => 'Pong: SRE Ansible Agent Ready';
+  
+  await window.testAnsibleConnectionUI();
+  const testResultDiv = document.getElementById('ansible-test-result');
+  assert(testResultDiv.innerHTML.includes('Połączenie aktywne'), 'Wynik testu musi zawierać informację o aktywnym połączeniu');
+  assert(testResultDiv.innerHTML.includes('Pong: SRE Ansible Agent Ready'), 'Wynik testu musi zawierać odpowiedź modelu');
+  
+  // Przywróć oryginalną metodę
+  window.geminiService.testConnection = originalTestConn;
+  console.log('✅ TEST PING: testAnsibleConnectionUI prawidłowo prezentuje wynik ping do modelu');
+
+  console.log('\n=== TEST 11: Weryfikacja Usuwania Klucza API w Module SRE (removeAnsibleApiKeyUI) ===');
+  global.confirm = () => true;
+  window.removeAnsibleApiKeyUI();
+  assert.strictEqual(window.geminiService.hasApiKey(), false, 'Po usunięciu geminiService.hasApiKey() musi zwracać false');
+  assert.strictEqual(window.geminiService.getApiKey(), null, 'Klucz API powinien być null po usunięciu');
+  console.log('✅ USUWANIE KLUCZA: removeAnsibleApiKeyUI pomyślnie czyści klucz API');
+
+  console.log('\n🎉 WSZYSTKIE 11 TESTÓW MODUŁU AUTOMATYZACJI SRE & ANSIBLE ZALICZONE Z SUKCESEM (100%)!');
 })();

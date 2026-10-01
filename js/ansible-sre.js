@@ -24,6 +24,23 @@
   };
 
   /**
+   * Dostępne modele Google Gemini API dla modułu SRE
+   */
+  const GEMINI_MODELS = [
+    { value: 'gemini-3.5-flash', label: '⭐ gemini-3.5-flash (Domyślny – ultra-szybki, deterministyczny)' },
+    { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Stabilny GA)' },
+    { value: 'gemini-3.7-flash', label: '🚀 gemini-3.7-flash (Agentic coding)' },
+    { value: 'gemini-3.8-flash-high', label: '🔬 gemini-3.8-flash-high (Głębokie wnioskowanie SRE)' },
+    { value: 'gemini-3.1-pro-preview', label: '🧠 gemini-3.1-pro-preview (Flagowy model Pro)' },
+    { value: 'gemini-3.5-flash-high', label: '⚡ gemini-3.5-flash-high (Wysoki budżet myślenia)' },
+    { value: 'gemini-3.6-flash', label: 'gemini-3.6-flash (Zrównoważony Flash 3.6)' },
+    { value: 'gemini-3.5-flash-lite', label: '🚀 gemini-3.5-flash-lite (Ultra-szybki, najniższy koszt)' },
+    { value: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite (Lekki i oszczędny)' },
+    { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro (Stabilny Pro generacji 2.5)' },
+    { value: 'gemini-2.0-flash-001', label: 'gemini-2.0-flash-001 (Wersja bazowa 2.0)' }
+  ];
+
+  /**
    * Katalog Produkcyjnych Playbooków SRE
    * Wszystkie playbooki spełniają wymóg Idempotentności, Zero-Risk Hospital Policy i obsługi --check
    */
@@ -993,7 +1010,15 @@
           </div>
 
           <!-- Status Modelu AI i Tryb Safe by Default -->
-          <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button 
+              class="btn btn-sm btn-secondary" 
+              style="font-size: 0.75rem; border-color: ${(window.geminiService && window.geminiService.hasApiKey()) ? 'var(--accent-teal)' : '#ffb703'}; color: ${(window.geminiService && window.geminiService.hasApiKey()) ? 'var(--accent-teal)' : '#ffb703'}; cursor: pointer;"
+              onclick="window.switchSRESubTab('ai')"
+              title="Kliknij, aby skonfigurować model i klucz Gemini API"
+            >
+              ${(window.geminiService && window.geminiService.hasApiKey()) ? `🟢 AI (${(window.geminiService && window.geminiService.getModel()) || 'gemini-3.5-flash'})` : '🔑 Wpisz Klucz API'}
+            </button>
             <span class="badge" style="background: rgba(6, 214, 160, 0.15); color: var(--accent-teal); border: 1px solid var(--accent-teal); font-size: 0.75rem;">
               🛡️ Safe by Default (--check)
             </span>
@@ -1417,6 +1442,7 @@
   function renderAiGeneratorTab() {
     const isApiKeySet = window.geminiService && window.geminiService.hasApiKey();
     const currentModel = (window.geminiService && window.geminiService.getModel()) || 'gemini-3.5-flash';
+    const currentApiKey = (window.geminiService && window.geminiService.getApiKey()) || '';
 
     return `
       <div style="display: flex; flex-direction: column; gap: 18px;">
@@ -1431,20 +1457,56 @@
               </p>
             </div>
 
-            <!-- Selektor Modelu Gemini -->
+            <!-- Selektor 11 Modeli Gemini -->
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 0.78rem; color: var(--text-muted);">Model AI:</span>
+              <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;">Model AI:</span>
               <select 
                 id="ansible-gemini-model-select" 
                 class="doc-input" 
-                style="padding: 4px 8px; font-size: 0.78rem; background: var(--bg-input); color: var(--text-primary); border-radius: var(--radius-sm);"
+                style="padding: 4px 10px; font-size: 0.8rem; background: var(--bg-input); color: var(--text-primary); border-radius: var(--radius-sm); min-width: 250px;"
                 onchange="window.onGeminiModelChange && window.onGeminiModelChange(this.value)"
               >
-                <option value="gemini-3.5-flash" ${currentModel === 'gemini-3.5-flash' ? 'selected' : ''}>⭐ gemini-3.5-flash</option>
-                <option value="gemini-2.5-flash" ${currentModel === 'gemini-2.5-flash' ? 'selected' : ''}>gemini-2.5-flash</option>
-                <option value="gemini-3.8-flash-high" ${currentModel === 'gemini-3.8-flash-high' ? 'selected' : ''}>gemini-3.8-flash-high</option>
+                ${GEMINI_MODELS.map(m => `
+                  <option value="${m.value}" ${m.value === currentModel ? 'selected' : ''}>
+                    ${m.label}
+                  </option>
+                `).join('')}
               </select>
             </div>
+          </div>
+
+          <!-- Konfiguracja Klucza Google Gemini API -->
+          <div style="background: var(--bg-canvas); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+              <label for="ansible-api-key-input" style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                <span>🔑</span> Konfiguracja Klucza Gemini API:
+              </label>
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="font-size: 0.75rem; color: var(--accent-cyan); text-decoration: underline;">
+                Pobierz darmowy klucz w Google AI Studio ↗
+              </a>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <input 
+                type="password" 
+                id="ansible-api-key-input" 
+                class="doc-input" 
+                style="flex: 1; min-width: 250px; font-family: var(--font-mono); font-size: 0.82rem;" 
+                placeholder="Wklej klucz API (AIzaSy...)" 
+                value="${window.escapeHtml ? window.escapeHtml(currentApiKey) : currentApiKey}" 
+              />
+              <button class="btn btn-primary btn-sm" onclick="window.saveAnsibleApiKeyUI()">
+                💾 Zapisz Klucz
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="window.testAnsibleConnectionUI()">
+                🔌 Testuj Połączenie (Ping)
+              </button>
+              ${isApiKeySet ? `
+                <button class="btn btn-secondary btn-sm" style="color: var(--accent-rose);" onclick="window.removeAnsibleApiKeyUI()">
+                  🗑️ Usuń
+                </button>
+              ` : ''}
+            </div>
+            <div id="ansible-test-result" style="margin-top: 8px;"></div>
           </div>
 
           <!-- Prompt dla generatora -->
@@ -1455,9 +1517,9 @@
             placeholder="np. Przygotuj playbook Ansible do automatycznego odnawiania certyfikatów SSL dla usług CKiK w systemie eKrew, z restartem Nginxa i sprawdzeniem ważności certyfikatu poleceniem openssl..."
           ></textarea>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; flex-wrap: wrap; gap: 10px;">
             <div style="font-size: 0.78rem; color: var(--text-muted);">
-              ${isApiKeySet ? '🟢 Klucz Gemini API aktywny' : '🟡 Tryb demonstracyjny / Offline (Wpisz klucz w ustawieniach Hubu)'}
+              ${isApiKeySet ? `🟢 Klucz aktywny (Aktywny model: ${currentModel})` : '🟡 Brak zapisanego klucza (Wpisz klucz powyżej lub użyj trybu offline)'}
             </div>
             <button class="btn btn-primary btn-sm" onclick="window.generateSREPlaybookWithAI()">
               ⚡ Generuj Idempotentny Playbook
@@ -1651,11 +1713,95 @@ Odpowiedz WYŁĄCZNIE blokiem YAML (\`\`\`yaml ... \`\`\`), zwięźle, bez zbęd
     }
   };
 
+  /**
+   * Zapisywanie klucza Google Gemini API z formularza SRE
+   */
+  window.saveAnsibleApiKeyUI = function () {
+    const input = document.getElementById('ansible-api-key-input');
+    const modelSelect = document.getElementById('ansible-gemini-model-select');
+    if (!input || !window.geminiService) return;
+
+    const key = input.value.trim();
+    if (!key) {
+      if (window.showToast) window.showToast('Wpisz klucz API przed zapisem!', 'warning');
+      return;
+    }
+
+    window.geminiService.setApiKey(key);
+    if (modelSelect && modelSelect.value) {
+      window.geminiService.setModel(modelSelect.value);
+    }
+    if (typeof window.updateGeminiStatusUI === 'function') {
+      window.updateGeminiStatusUI();
+    }
+    renderAnsibleSREModule();
+    if (window.showToast) window.showToast('Klucz Gemini API został zapisany pomyślnie! 💾', 'success');
+  };
+
+  /**
+   * Usuwanie klucza Gemini API z formularza SRE
+   */
+  window.removeAnsibleApiKeyUI = function () {
+    const doRemove = typeof confirm === 'function' ? confirm('Czy na pewno chcesz usunąć klucz Gemini API z przeglądarki?') : true;
+    if (doRemove) {
+      if (window.geminiService) {
+        window.geminiService.removeApiKey();
+      }
+      if (typeof window.updateGeminiStatusUI === 'function') {
+        window.updateGeminiStatusUI();
+      }
+      renderAnsibleSREModule();
+      if (window.showToast) window.showToast('Usunięto klucz Gemini API.', 'info');
+    }
+  };
+
+  /**
+   * Testowanie połączenia (ping) z wybranym modelem Gemini API w module SRE
+   */
+  window.testAnsibleConnectionUI = async function () {
+    const resultDiv = document.getElementById('ansible-test-result');
+    const modelSelect = document.getElementById('ansible-gemini-model-select');
+    if (!resultDiv || !window.geminiService) return;
+
+    if (modelSelect && modelSelect.value) {
+      window.geminiService.setModel(modelSelect.value);
+    }
+
+    const activeModel = window.geminiService.getModel();
+    resultDiv.innerHTML = `<span style="font-size: 0.8rem; color: var(--accent-cyan);">⏳ Testowanie połączenia z Gemini API (${escapeForAttr(activeModel)})...</span>`;
+
+    try {
+      const reply = await window.geminiService.testConnection();
+      if (reply) {
+        resultDiv.innerHTML = `
+          <div style="background: rgba(6, 214, 160, 0.1); border: 1px solid var(--accent-teal); border-radius: var(--radius-sm); padding: 10px; font-size: 0.82rem; color: var(--accent-teal); margin-top: 6px;">
+            ✅ <strong>Połączenie aktywne z modelem ${escapeForAttr(activeModel)}!</strong><br/>Odpowiedź: "${escapeForAttr(reply.trim())}"
+          </div>
+        `;
+        if (typeof window.updateGeminiStatusUI === 'function') {
+          window.updateGeminiStatusUI();
+        }
+        if (window.showToast) {
+          window.showToast(`Połączenie z ${activeModel} aktywne! ⚡`, 'success');
+        }
+      } else {
+        resultDiv.innerHTML = `<div style="background: rgba(239, 71, 111, 0.1); border: 1px solid var(--accent-rose); border-radius: var(--radius-sm); padding: 10px; font-size: 0.82rem; color: var(--accent-rose); margin-top: 6px;">❌ Błąd: brak odpowiedzi od modelu.</div>`;
+      }
+    } catch (err) {
+      resultDiv.innerHTML = `
+        <div style="background: rgba(239, 71, 111, 0.1); border: 1px solid var(--accent-rose); border-radius: var(--radius-sm); padding: 10px; font-size: 0.82rem; color: var(--accent-rose); margin-top: 6px;">
+          ❌ <strong>Błąd połączenia (${escapeForAttr(activeModel)}):</strong> ${escapeForAttr(err.message)}
+        </div>
+      `;
+    }
+  };
+
   // Eksport publiczny
   window.renderAnsibleSREModule = renderAnsibleSREModule;
   window.parseAnsibleOutput = parseAnsibleOutput;
   window.SRE_PLAYBOOKS = SRE_PLAYBOOKS;
   window.SRE_SCRIPTS = SRE_SCRIPTS;
   window.sreState = sreState;
+  window.GEMINI_MODELS_SRE = GEMINI_MODELS;
 
 })();
