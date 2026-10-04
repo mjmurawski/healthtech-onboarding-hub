@@ -213,6 +213,30 @@ Twoja specjalistyczna domena:
 - Prowadzisz inżyniera krok po kroku przez badanie stanu bazy w trybie Ping-Pong: DOKŁADNIE JEDNO zapytanie SELECT na turę -> analiza wyniku wklejonego przez inżyniera -> kolejne zapytanie zawężające lub konkluzja [AWARIA ROZWIĄZANA].
 
 ${baseSafety}
+`.trim(),
+
+      ansible: `
+Jesteś specjalistycznym Agentem AI i Pilotem Automatyzacji SRE dla Ansible w środowiskach systemów medycznych (LIS, eKrew, PatExpert, Genetyka, bazy PostgreSQL, Firebird, serwery aplikacyjne Linux).
+Twoja specjalistyczna domena:
+- Automatyzacja SRE i Ansible: playbooki, role, inventory, zadania idempotentne, obsługa flag --check (dry-run) i --diff.
+- Diagnostyka awarii uruchomień Ansible i PLAY RECAP:
+  * fatal: FAILED! / rc!=0 (błędy wykonania modułów: command, systemd, posix.mount, template, lineinfile, postgresql_query).
+  * fatal: UNREACHABLE! (błędy uwierzytelniania SSH, brak klucza publickey, problemy z uprawnieniami become/sudo, blokady sieciowe portu 22).
+  * dry-run drift (--check): wykrywanie i obsługa niezamierzonych zmian w plikach konfiguracyjnych i usługach.
+  * Blokady systemowe: /var/lib/dpkg/lock-frontend, procesy unattended-upgrades.
+  * Montowania zasobów sieciowych: NFS/PACS, macierze WSI, demony MLLP/HL7.
+- Reżim SRE & Zero-Risk Hospital Policy:
+  * Wymuszaj idempotentność operacji (brak niszczących komend bez warunków sprawdzających changed_when/failed_when).
+  * Zawsze preferuj bezpieczne komendy weryfikujące stan (np. ansible <host> -m ping, ssh -Tv <host>, systemctl status, journalctl, rpcinfo) przed zmianą konfiguracji.
+  * W przypadku modyfikacji zalecaj uruchomienie z flagami --check i --diff.
+  * W playbookach wdrożeniowych stosuj strukturę block/rescue z procedurą rollbacku.
+- Tryb pracy Ping-Pong (REPL):
+  1. Analizujesz błąd wykonania playbooka lub log Ansible i formułujesz natychmiastową hipotezę root-cause.
+  2. W KROKU 1 podajesz DOKŁADNIE JEDNĄ komendę Bash / Ansible do weryfikacji stanu (np. ansible <host> -m ping, ssh -Tv <host>, journalctl, systemctl status).
+  3. Czekasz na wynik wklejony przez inżyniera.
+  4. Analizujesz wynik, podajesz kolejną komendę diagnostyczną lub korygujący task ze sprawdzeniem (check mode), a po rozwiązaniu problemu kończysz: [AWARIA ROZWIĄZANA].
+
+${baseSafety}
 `.trim()
     };
 
@@ -1389,7 +1413,7 @@ class GeminiPilotSession {
     this.detectedService = this._detectServiceFromLog(this.rawLog);
     this.hypothesis = this._getInitialHypothesis(this.systemType);
 
-    const isMedical = ['lis', 'ekrew', 'patexpert', 'genetyka'].includes(this.systemType);
+    const isMedical = ['lis', 'ekrew', 'patexpert', 'genetyka', 'ansible'].includes(this.systemType);
     const systemTitle = isMedical ? `systemie ${this._getSystemDisplay(this.systemType)}` : 'serwerze szpitalnym';
 
     const initialUserMessage = `
@@ -1574,6 +1598,7 @@ Skoryguj swoje podejście lub zaproponuj alternatywną komendę/zapytanie (DOKŁ
   _detectSystemType(log) {
     if (!log) return "linux";
     const l = log.toLowerCase();
+    if (l.includes("ansible") || l.includes("play recap") || l.includes("playbook") || l.includes("unreachable") || l.includes("fatal: [") || l.includes("changed=") || l.includes("extra_vars")) return "ansible";
     if (l.includes("astm") || l.includes("mllp") || l.includes("lis") || l.includes("cobas") || l.includes("sysmex") || l.includes("mirth") || l.includes("obx") || l.includes("orm^o01") || l.includes("oru^r01") || l.includes("probk") || l.includes("zlecen")) return "lis";
     if (l.includes("isbt") || l.includes("ekrew") || l.includes("ckik") || l.includes("kkcz") || l.includes("ffp") || l.includes("kkp") || l.includes("krew") || l.includes("transakcje_temp") || l.includes("krwiodaw")) return "ekrew";
     if (l.includes("svs") || l.includes("ndpi") || l.includes("mrxs") || l.includes("wsi") || l.includes("patexpert") || l.includes("patolog") || l.includes("hist-pat") || l.includes("histopat") || l.includes("aperio") || l.includes("hamamatsu") || l.includes("kafelk") || l.includes("tile")) return "patexpert";
@@ -1587,6 +1612,7 @@ Skoryguj swoje podejście lub zaproponuj alternatywną komendę/zapytanie (DOKŁ
     if (s === 'ekrew') return 'eKrew';
     if (s === 'patexpert') return 'PatExpert';
     if (s === 'genetyka') return 'Genetyka';
+    if (s === 'ansible') return 'Ansible (SRE)';
     if (s === 'stack_decoder') return 'Dekoder Stack Trace';
     if (s === 'sql_generator') return 'Generator SQL';
     return 'Linux';
@@ -1598,6 +1624,7 @@ Skoryguj swoje podejście lub zaproponuj alternatywną komendę/zapytanie (DOKŁ
     if (s === 'ekrew') return 'Weryfikacja blokad w transakcjach tymczasowych i statusu CKiK';
     if (s === 'patexpert') return 'Weryfikacja montażu NFS skanów WSI i serwera kafelków';
     if (s === 'genetyka') return 'Weryfikacja nagłówków VCF, pamięci RAM i pipeline obliczeniowego';
+    if (s === 'ansible') return 'Weryfikacja błędu playbooka Ansible, łączności SSH lub idempotentności zadania';
     if (s === 'stack_decoder') return 'Analiza błędu aplikacji i weryfikacja konfiguracji/stanu procesu';
     if (s === 'sql_generator') return 'Weryfikacja spójności danych i relacji tabelarycznych w bazie medycznej';
     return 'Weryfikacja parametrów bazowych i zasobów (Error-First)';
@@ -1606,6 +1633,7 @@ Skoryguj swoje podejście lub zaproponuj alternatywną komendę/zapytanie (DOKŁ
   _detectServiceFromLog(log) {
     if (!log) return "Linux System";
     const l = log.toLowerCase();
+    if (l.includes("ansible") || l.includes("playbook") || l.includes("play recap")) return "ansible-playbook";
     if (l.includes("postgres") || l.includes("5432") || l.includes("pg_wal") || l.includes("shmmax")) return "postgresql.service";
     if (l.includes("orthanc") || l.includes("4242") || l.includes("dicom")) return "orthanc.service";
     if (l.includes("mirth") || l.includes("8443") || l.includes("2575")) return "mirth-connect.service";
@@ -1652,6 +1680,11 @@ Skoryguj swoje podejście lub zaproponuj alternatywną komendę/zapytanie (DOKŁ
 
     let category = "Interaktywny Pilot REPL";
     let tags = [this.systemType.toLowerCase(), 'pilot-ai', 'repl'];
+
+    if (this.systemType === 'ansible') {
+      tags.push('sre', 'automation');
+      category = "Automatyzacja SRE & Ansible";
+    }
 
     if (this.systemType === 'stack_decoder') {
       category = "Dekoder Błędów Aplikacyjnych";

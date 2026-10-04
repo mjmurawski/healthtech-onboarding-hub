@@ -48,18 +48,21 @@ assert(SYSTEMS_KB.lis, 'Brak modułu LIS w SYSTEMS_KB');
 assert(SYSTEMS_KB.ekrew, 'Brak modułu eKrew w SYSTEMS_KB');
 assert(SYSTEMS_KB.patexpert, 'Brak modułu PatExpert w SYSTEMS_KB');
 assert(SYSTEMS_KB.genetyka, 'Brak modułu Genetyka w SYSTEMS_KB');
+assert(SYSTEMS_KB.ansible, 'Brak modułu Ansible w SYSTEMS_KB');
 
 const totalScenarios = SYSTEMS_KB.lis.scenarios.length +
                        SYSTEMS_KB.ekrew.scenarios.length +
                        SYSTEMS_KB.patexpert.scenarios.length +
-                       SYSTEMS_KB.genetyka.scenarios.length;
+                       SYSTEMS_KB.genetyka.scenarios.length +
+                       SYSTEMS_KB.ansible.scenarios.length;
 
 console.log(`- LIS scenariusze: ${SYSTEMS_KB.lis.scenarios.length}`);
 console.log(`- eKrew scenariusze: ${SYSTEMS_KB.ekrew.scenarios.length}`);
 console.log(`- PatExpert scenariusze: ${SYSTEMS_KB.patexpert.scenarios.length}`);
 console.log(`- Genetyka scenariusze: ${SYSTEMS_KB.genetyka.scenarios.length}`);
+console.log(`- Ansible scenariusze: ${SYSTEMS_KB.ansible.scenarios.length}`);
 console.log(`- Łączna liczba scenariuszy: ${totalScenarios}`);
-assert(totalScenarios >= 24, `Powinno być co najmniej 24 scenariusze, jest: ${totalScenarios}`);
+assert(totalScenarios >= 30, `Powinno być co najmniej 30 scenariuszy, jest: ${totalScenarios}`);
 
 Object.keys(SYSTEMS_KB).forEach(sysKey => {
   SYSTEMS_KB[sysKey].scenarios.forEach(sc => {
@@ -71,7 +74,7 @@ Object.keys(SYSTEMS_KB).forEach(sysKey => {
     assert(Array.isArray(sc.sqlQueries), `Brak zapytań SQL w ${sc.id}`);
   });
 });
-console.log('✅ SYSTEMS_KB: Wszystkie 24 scenariusze zawierają kompletne dane diagnostyczne');
+console.log('✅ SYSTEMS_KB: Wszystkie 30 scenariuszy (w tym Ansible) zawierają kompletne dane diagnostyczne');
 
 console.log('\n=== TEST 2: Weryfikacja Dekodera Stack Trace (STACK_KB & Offline Matching) ===');
 const decoderCode = fs.readFileSync(path.join(__dirname, 'js', 'stack-decoder.js'), 'utf8');
@@ -180,7 +183,7 @@ const presetKeys = Object.keys(MEDICAL_PRESETS);
 console.log(`- Liczba szybkich scenariuszy produkcyjnych: ${presetKeys.length}`);
 assert(presetKeys.length >= 16, `Powinno być co najmniej 16 presetów (4 na system), jest: ${presetKeys.length}`);
 
-const presetSystems = { lis: 0, ekrew: 0, patexpert: 0, genetyka: 0 };
+const presetSystems = { lis: 0, ekrew: 0, patexpert: 0, genetyka: 0, ansible: 0 };
 presetKeys.forEach(k => {
   const p = MEDICAL_PRESETS[k];
   assert(p.system && presetSystems[p.system] !== undefined, `Nieprawidłowy system w presecie: ${k}`);
@@ -193,9 +196,10 @@ assert.strictEqual(presetSystems.lis, 4, 'LIS powinien mieć dokładnie 4 preset
 assert.strictEqual(presetSystems.ekrew, 4, 'eKrew powinien mieć dokładnie 4 presety');
 assert.strictEqual(presetSystems.patexpert, 4, 'PatExpert powinien mieć dokładnie 4 presety');
 assert.strictEqual(presetSystems.genetyka, 4, 'Genetyka powinna mieć dokładnie 4 presety');
-console.log('✅ MEDICAL_PRESETS: Wszystkie 4 systemy posiadają po 4 gotowe scenariusze szpitalne');
+assert(presetSystems.ansible >= 5, `Ansible powinien mieć co najmniej 5 presetów, ma: ${presetSystems.ansible}`);
+console.log('✅ MEDICAL_PRESETS: Wszystkie 5 systemów posiadają gotowe scenariusze szpitalne');
 
-// 5.2 Załaduj i przetestuj gemini-service z rolami medycznymi
+// 5.2 Załaduj i przetestuj gemini-service z rolami medycznymi i SRE
 const geminiCode = fs.readFileSync(path.join(__dirname, 'js', 'gemini-service.js'), 'utf8');
 eval(geminiCode);
 
@@ -215,7 +219,10 @@ assert(patInstr.includes('PatExpert') && patInstr.includes('WSI') && patInstr.in
 const genInstr = geminiService.getMedicalPilotInstruction('genetyka');
 assert(genInstr.includes('Genetyk') && genInstr.includes('VCF') && genInstr.includes('OOM'), 'Prompt Genetyka powinien zawierać VCF i OOM');
 
-console.log('✅ Dedykowane instrukcje systemowe dla 4 systemów medycznych zawierają pełny kontekst domenowy');
+const ansibleInstr = geminiService.getMedicalPilotInstruction('ansible');
+assert(ansibleInstr.includes('Ansible') && ansibleInstr.includes('playbook'), 'Prompt Ansible powinien zawierać domenę Ansible i playbook');
+
+console.log('✅ Dedykowane instrukcje systemowe dla 5 systemów (w tym Ansible) zawierają pełny kontekst domenowy');
 
 // 5.3 Weryfikacja instancji dedykowanego Pilota Medycznego
 const medSession = geminiService.getMedicalPilotSession();
@@ -281,7 +288,62 @@ assert.ok(runbook.tags.includes('pilot-ai'), 'Tagi powinny zawierać pilot-ai');
 assert.ok(runbook.postMortemNotes.includes('```sql'), 'Notatki Post-Mortem powinny zawierać blok z kodem sql');
 assert.ok(runbook.postMortemNotes.includes('AWARIA ROZWIĄZANA'), 'Notatki powinny potwierdzać rozwiązanie awarii');
 
-console.log('✅ Interaktywny Pilot Medyczny REPL bezbłędnie asystuje przy LIS, eKrew, PatExpert i Genetyce');
+// 5.4 Symulacja pełnej sesji Pilota AI dla systemu Ansible
+medSession.reset();
+medSession.systemType = 'ansible';
+medSession.rawLog = MEDICAL_PRESETS.ansible_failed.log;
+medSession.detectedService = 'ansible-playbook';
+medSession.hypothesis = 'Awaria zadania Ansible z niezerowym kodem rc=1';
+medSession.status = 'ACTIVE';
+medSession.stepNumber = 1;
+
+const mockAnsibleResponse = `💡 Diagnoza: Zadanie playbooka zgłasza Connection Refused do bazy PostgreSQL na porcie 5432.
+🎯 Cel: Weryfikacja stanu usługi PostgreSQL na hoście master
+💻 Komenda:
+\`\`\`bash
+ansible his-db-master.med.local -m systemd -a "name=postgresql" --become
+\`\`\`
+❓ Oczekiwanie: Wklej wynik polecenia modułowego Ansible z terminala.`;
+
+const parsedAnsible = geminiService.parsePilotMessage(mockAnsibleResponse);
+assert.strictEqual(parsedAnsible.isSQL, false, 'Komenda powinna być rozpoznana jako bash');
+assert.ok(parsedAnsible.command.includes('ansible'), 'Komenda powinna zawierać polecenie ansible');
+
+medSession.turns.push({
+  type: 'agent',
+  stepNumber: 1,
+  parsed: parsedAnsible,
+  timestamp: '14:05:00'
+});
+
+medSession.turns.push({
+  type: 'user',
+  stepNumber: 1,
+  text: 'his-db-master.med.local | SUCCESS => {\n    "name": "postgresql",\n    "status": {\n        "ActiveState": "active"\n    }\n}',
+  timestamp: '14:05:25'
+});
+
+const mockAnsibleResolved = `💡 Diagnoza: Usługa bazy danych została uruchomiona, ponowne wykonanie playbooka z flagą --check zakończone sukcesem (changed=0, failed=0).
+🎉 [AWARIA ROZWIĄZANA]`;
+
+const parsedAnsibleResolved = geminiService.parsePilotMessage(mockAnsibleResolved);
+medSession.turns.push({
+  type: 'agent',
+  stepNumber: 2,
+  parsed: parsedAnsibleResolved,
+  timestamp: '14:06:00'
+});
+medSession.isResolved = true;
+medSession.status = 'RESOLVED';
+medSession.stepNumber = 2;
+
+const ansibleRunbook = medSession.toRunbookRecord();
+assert.strictEqual(ansibleRunbook.system, 'Ansible (SRE)', 'System w Runbooku powinien wynosić Ansible (SRE)');
+assert.ok(ansibleRunbook.tags.includes('ansible'), 'Tagi powinny zawierać ansible');
+assert.ok(ansibleRunbook.tags.includes('sre'), 'Tagi powinny zawierać sre');
+assert.ok(ansibleRunbook.postMortemNotes.includes('AWARIA ROZWIĄZANA'), 'Notatki powinny potwierdzać rozwiązanie awarii');
+
+console.log('✅ Interaktywny Pilot Medyczny REPL bezbłędnie asystuje przy LIS, eKrew, PatExpert, Genetyce i Ansible');
 
 console.log('\n=== TEST 6: Weryfikacja Konfiguracji i Przełącznika Modeli AI w Zakładce Systemów Medycznych ===');
 assert(Array.isArray(window.GEMINI_MODELS), 'window.GEMINI_MODELS powinno być tablicą');

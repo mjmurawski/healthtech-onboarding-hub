@@ -393,6 +393,116 @@ const SYSTEMS_KB = {
                 safetyNote: null
             }
         ]
+    },
+    ansible: {
+        name: 'Ansible – Automatyzacja SRE',
+        icon: '🤖',
+        color: '#e63946',
+        description: 'Automatyzacja infrastruktury szpitalnej, playbooki Ansible, weryfikacja dry-run (--check), samonaprawa usług i idempotencja.',
+        scenarios: [
+            {
+                id: 'ansible_1',
+                title: 'Nieudane wykonanie playbooka (fatal: FAILED! rc=1)',
+                symptoms: [
+                    'Zadanie playbooka zakończone błędem fatal: FAILED!',
+                    'PLAY RECAP wskazuje failed=1',
+                    'Przerwany proces wdrażania zmian na węźle szpitalnym (brak idempotencji lub błąd komendy)'
+                ],
+                cause: 'Błąd wykonania skryptu wewnętrznego, nieprawidłowy kod powrotu (rc!=0) lub niespełnione warunki wstępne na hoście.',
+                steps: [
+                    { action: 'Uruchom playbook z flagą szczegółowości -vvv dla pojedynczego hosta', cmd: 'ansible-playbook -i inventory/hosts site.yml --limit <HOST> -vvv' },
+                    { action: 'Sprawdź stan usługi docelowej na hoście zdalnym', cmd: 'ansible <HOST> -m systemd -a "name=postgresql" --become' },
+                    { action: 'Przetestuj wykonanie w trybie bezpiecznym dry-run (--check)', cmd: 'ansible-playbook -i inventory/hosts site.yml --check --diff' }
+                ],
+                sqlQueries: [
+                    { label: 'Weryfikacja aktywnych połączeń bazy po przerwaniu zadania', sql: 'SELECT pid, usename, client_addr, state, query FROM pg_stat_activity WHERE state != \'idle\' LIMIT 10;', params: [] }
+                ],
+                safetyNote: 'Nigdy nie ignoruj błędu poprzez ignore_errors: true na produkcji szpitalnej bez dokładnej analizy przyczyny źródłowej!'
+            },
+            {
+                id: 'ansible_2',
+                title: 'Błąd osiągalności hosta (fatal: UNREACHABLE! Permission denied)',
+                symptoms: [
+                    'Komunikat fatal: [host]: UNREACHABLE!',
+                    'Permission denied (publickey,gssapi-keyex,password)',
+                    'Brak możliwości zebrania faktów (setup module)'
+                ],
+                cause: 'Brak lub nieprawidłowy klucz SSH w ssh-agent, zmiana uprawnień do ~/.ssh/authorized_keys lub blokada portu 22 w firewallu.',
+                steps: [
+                    { action: 'Sprawdź łączność sieciową z portem SSH', cmd: 'nc -zv <HOST> 22' },
+                    { action: 'Przetestuj logowanie SSH z jawnym kluczem prywatnym i trybem debugowania', cmd: 'ssh -vvv -i ~/.ssh/id_rsa_ansible deploy@<HOST>' },
+                    { action: 'Wykonaj prosty ping modułowy Ansible z inventory', cmd: 'ansible <HOST> -i inventory/hosts -m ping' }
+                ],
+                sqlQueries: [],
+                safetyNote: null
+            },
+            {
+                id: 'ansible_3',
+                title: 'Dry-run drift (--check) wykazuje niezamierzone modyfikacje',
+                symptoms: [
+                    'ansible-playbook --check raportuje changed > 0 dla stabilnych serwerów produkcyjnych',
+                    'Pliki konfiguracyjne różnią się od szablonów Jinja2 w repozytorium'
+                ],
+                cause: 'Ręczna zmiana konfiguracji dokonana bezpośrednio na serwerze (configuration drift) lub brak idempotencji w zadaniu template/lineinfile.',
+                steps: [
+                    { action: 'Wyświetl dokładne różnice w plikach (--diff) w trybie symulacji', cmd: 'ansible-playbook -i inventory/hosts site.yml --check --diff' },
+                    { action: 'Porównaj sumę kontrolną pliku produkcyjnego z repozytorium', cmd: 'ansible <HOST> -m stat -a "path=/etc/nginx/nginx.conf"' },
+                    { action: 'Zabezpiecz lokalną kopię przed wdrożeniem', cmd: 'ansible <HOST> -m copy -a "src=/etc/nginx/nginx.conf dest=/etc/nginx/nginx.conf.bak remote_src=yes"' }
+                ],
+                sqlQueries: [],
+                safetyNote: 'Zasada Safe by Default: Zawsze uruchamiaj playbook z flagami --check i --diff przed wdrożeniem zmian na produkcji szpitalnej!'
+            },
+            {
+                id: 'ansible_4',
+                title: 'Zablokowany menedżer pakietów apt/dpkg na serwerze',
+                symptoms: [
+                    'fatal: [host]: FAILED! => E: Could not get lock /var/lib/dpkg/lock-frontend',
+                    'Inny proces blokuje instalację pakietów (np. unattended-upgrades)'
+                ],
+                cause: 'Automatyczny proces aktualizacji systemu w tle lub przerwany wcześniej proces apt.',
+                steps: [
+                    { action: 'Zidentyfikuj proces trzymający blokadę pliku lock', cmd: 'ansible <HOST> -m command -a "lsof /var/lib/dpkg/lock-frontend" --become' },
+                    { action: 'Zweryfikuj stan usługi unattended-upgrades', cmd: 'ansible <HOST> -m systemd -a "name=unattended-upgrades" --become' },
+                    { action: 'Dokończ przerwane konfiguracje po zwolnieniu procesu', cmd: 'ansible <HOST> -m command -a "dpkg --configure -a" --become' }
+                ],
+                sqlQueries: [],
+                safetyNote: 'Nie usuwaj plików *.lock poleceniem rm na oślep! Upewnij się, że proces apt/dpkg rzeczywiście nie działa.'
+            },
+            {
+                id: 'ansible_5',
+                title: 'Timeout montażu macierzy NFS podczas playbooka backupu/PACS',
+                symptoms: [
+                    'Zadanie ansible.posix.mount zawiesza się na ponad 60 sekund',
+                    'Błąd: Connection timed out lub mount.nfs: server not responding'
+                ],
+                cause: 'Niedostępność serwera NFS, problem z demonem rpcbind lub błąd w opcjach montowania (np. brak soft,timeo).',
+                steps: [
+                    { action: 'Sprawdź dostępność portmappera i usług RPC na serwerze NFS', cmd: 'rpcinfo -p <NFS_SERVER>' },
+                    { action: 'Sprawdź wyeksportowane katalogi NFS', cmd: 'showmount -e <NFS_SERVER>' },
+                    { action: 'Wymuś odmontowanie wiszącego zasobu lazy/force', cmd: 'sudo umount -l -f /mnt/pacs_storage' }
+                ],
+                sqlQueries: [
+                    { label: 'Weryfikacja oczekujących zadań transferu WSI', sql: 'SELECT id, nr_badania, sciezka_pliku, status_uploadu FROM skany_wsi WHERE status_uploadu = \'OCZEKUJE\' LIMIT 10;', params: [] }
+                ],
+                safetyNote: 'W konfiguracji NFS dla systemów medycznych stosuj opcje: hard,intr,timeo=50 aby zapobiec twardym zawieszeniom jądra Linux.'
+            },
+            {
+                id: 'ansible_6',
+                title: 'Rollback po nieudanym wdrożeniu patcha aplikacyjnego',
+                symptoms: [
+                    'Sekcja block zakończyła się błędem',
+                    'Uruchomienie sekcji rescue i przywracanie poprzedniej wersji artefaktu'
+                ],
+                cause: 'Błąd smoke testu nowej wersji aplikacji, nieuruchamiający się demon po podmianie binarnej.',
+                steps: [
+                    { action: 'Zweryfikuj stan przywróconej wersji w sekcji rescue', cmd: 'ansible <HOST> -m systemd -a "name=patexpert-core" --become' },
+                    { action: 'Wykonaj test dymny (healthcheck) endpointu HTTP', cmd: 'curl -fsSL -m 5 http://<HOST>:8080/health || echo "HEALTHCHECK_FAILED"' },
+                    { action: 'Zweryfikuj logi błędu z journalctl po incydencie', cmd: 'ansible <HOST> -m command -a "journalctl -u patexpert-core -n 50 --no-pager" --become' }
+                ],
+                sqlQueries: [],
+                safetyNote: 'Każdy produkcyjny playbook wdrożeniowy w szpitalu musi posiadać strukturę block-rescue z automatycznym rollbackiem wersji!'
+            }
+        ]
     }
 };
 
@@ -629,10 +739,36 @@ const MEDICAL_PRESETS = {
         system: 'genetyka',
         title: '📊 [Genetyka: SLURM] Zadanie bioinformatyczne zabite przez SLURM',
         log: 'slurmstepd: error: Detected 1 oom-kill event(s) in StepId=49812.0. Some of your processes may have been killed by the cgroup out-of-memory handler.'
+    },
+
+    ansible_failed: {
+        system: 'ansible',
+        title: '🤖 [Ansible: Błąd zadania] fatal: [his-db]: FAILED! rc=1',
+        log: 'fatal: [his-db-master.med.local]: FAILED! => {"changed": false, "cmd": ["python3", "/usr/local/bin/sre_pg_pool_guard.py", "--threshold", "30"], "msg": "non-zero return code", "rc": 1, "stderr": "ConnectionRefusedError: [Errno 111] Connection refused on 127.0.0.1:5432"}'
+    },
+    ansible_unreachable: {
+        system: 'ansible',
+        title: '🔌 [Ansible: SSH] fatal: [lis-01]: UNREACHABLE! Permission denied',
+        log: 'fatal: [lis-01.med.local]: UNREACHABLE! => {"changed": false, "msg": "Failed to connect to the host via ssh: Permission denied (publickey,gssapi-keyex,password).", "unreachable": true}'
+    },
+    ansible_drift: {
+        system: 'ansible',
+        title: '🔍 [Ansible: Check Mode] Drift konfiguracji eKrew (changed=4 w --check)',
+        log: 'PLAY [eKrew SSL Certificate & Nginx Guard] ********************\nTASK [Wdróż szablon nginx.conf] **********************************\nchanged: [ekrew-node-01.med.local]\nTASK [Sprawdź ważność certyfikatu CKiK] **************************\nchanged: [ekrew-node-01.med.local]\nPLAY RECAP *******************************************************\nekrew-node-01.med.local : ok=6 changed=4 unreachable=0 failed=0 (DRY-RUN)'
+    },
+    ansible_nfs: {
+        system: 'ansible',
+        title: '💾 [Ansible: NFS Mount] Timeout montażu macierzy PatExpert PACS',
+        log: 'fatal: [pacs-storage-01.med.local]: FAILED! => {"changed": false, "cmd": ["mount", "-t", "nfs", "192.168.10.50:/pacs_wsi", "/mnt/pacs_storage"], "msg": "mount.nfs: Connection timed out", "rc": 32}'
+    },
+    ansible_lock: {
+        system: 'ansible',
+        title: '🔒 [Ansible: Lock] E: Could not get lock /var/lib/dpkg/lock-frontend',
+        log: 'fatal: [genetyka-compute-02.med.local]: FAILED! => {"changed": false, "msg": "Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 41029 (unattended-upgr)"}'
     }
 };
 
-let currentSpecialistSystem = 'auto'; // 'lis' | 'ekrew' | 'patexpert' | 'genetyka' | 'auto'
+let currentSpecialistSystem = 'auto'; // 'lis' | 'ekrew' | 'patexpert' | 'genetyka' | 'ansible' | 'auto'
 
 /**
  * Wybór aktywnego systemu dla Agenta AI
@@ -1160,6 +1296,7 @@ function renderMedicalPilotUI() {
     if (session.systemType === 'ekrew') themeColor = '#ef476f';
     if (session.systemType === 'patexpert') themeColor = '#8338ec';
     if (session.systemType === 'genetyka') themeColor = '#3b82f6';
+    if (session.systemType === 'ansible') themeColor = '#e63946';
 
     const statusBadge = isResolved
         ? `<span style="background: rgba(6, 214, 160, 0.15); color: var(--accent-teal); font-size: 0.78rem; font-weight: 800; padding: 4px 10px; border-radius: 12px; border: 1px solid var(--accent-teal);">🟢 STAN: [AWARIA ROZWIĄZANA]</span>`
@@ -1591,10 +1728,10 @@ function renderSystemsSpecialistModule() {
                             </span>
                         </div>
                         <h2 style="color: var(--text-primary); margin: 0; font-size: 1.35rem;">
-                            🏥 Agent AI & Pilot Diagnostyczny IT (LIS / eKrew / PatExpert / Genetyka)
+                            🏥 Agent AI & Pilot Diagnostyczny IT (LIS / eKrew / PatExpert / Genetyka / Ansible)
                         </h2>
                         <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 4px 0 0 0;">
-                            Wybierz środowisko szpitalne, wklej fragment logu lub kliknij scenariusz awarii. Agent prowadzi interaktywną procedurę krok po kroku z weryfikacją komend Bash i zapytań SELECT.
+                            Wybierz środowisko szpitalne, wklej fragment logu lub kliknij scenariusz awarii. Agent prowadzi interaktywną procedurę krok po kroku z weryfikacją komend Bash, zapytań SELECT oraz playbooków Ansible.
                         </p>
                     </div>
                 </div>
@@ -1613,6 +1750,9 @@ function renderSystemsSpecialistModule() {
                     <button class="med-sys-pill btn btn-secondary btn-sm" data-sys="genetyka" data-color="#3b82f6" onclick="window.setMedicalSelectedSystem('genetyka')" style="font-weight: 600; padding: 6px 14px; border-radius: 20px;">
                         🧬 Genetyka (NGS / WGS)
                     </button>
+                    <button class="med-sys-pill btn btn-secondary btn-sm" data-sys="ansible" data-color="#e63946" onclick="window.setMedicalSelectedSystem('ansible')" style="font-weight: 600; padding: 6px 14px; border-radius: 20px;">
+                        🤖 Ansible (SRE)
+                    </button>
                     <button class="med-sys-pill btn btn-secondary btn-sm" data-sys="auto" data-color="#00b4d8" onclick="window.setMedicalSelectedSystem('auto')" style="font-weight: 600; padding: 6px 14px; border-radius: 20px;">
                         🤖 Auto-Wykryj z logu
                     </button>
@@ -1630,7 +1770,7 @@ function renderSystemsSpecialistModule() {
 
                 <!-- Pole Wprowadzania Logu -->
                 <div style="margin-bottom: 14px;">
-                    <textarea id="medical-pilot-log-input" class="hl7-raw-input" style="min-height: 95px; width: 100%; color: #67e8f9; font-family: var(--font-mono); font-size: 0.85rem; padding: 10px 12px; background: #0f172a; border: 1px solid var(--border-color); border-radius: var(--radius-sm);" placeholder="Wklej tutaj treść błędu z logu analizatora, eKrew, PatExpert, pipeline genetycznego lub klienta SQL...">${escapeHtml(MEDICAL_PRESETS.lis_astm.log)}</textarea>
+                    <textarea id="medical-pilot-log-input" class="hl7-raw-input" style="min-height: 95px; width: 100%; color: #67e8f9; font-family: var(--font-mono); font-size: 0.85rem; padding: 10px 12px; background: #0f172a; border: 1px solid var(--border-color); border-radius: var(--radius-sm);" placeholder="Wklej tutaj treść błędu z logu analizatora, eKrew, PatExpert, pipeline genetycznego, zadania Ansible lub klienta SQL...">${escapeHtml(MEDICAL_PRESETS.lis_astm.log)}</textarea>
                 </div>
 
                 <!-- Przyciski Akcji i Wybór Modelu AI -->
@@ -1646,7 +1786,7 @@ function renderSystemsSpecialistModule() {
                             🧹 Wyczyść
                         </button>
                         <a href="#specialist-kb-section" class="btn btn-secondary" style="text-decoration: none; display: inline-flex; align-items: center;">
-                            📖 Pełna Baza Wiedzy (24 scenariusze) ↓
+                            📖 Pełna Baza Wiedzy (30 scenariuszy) ↓
                         </a>
                     </div>
 
@@ -1674,15 +1814,15 @@ function renderSystemsSpecialistModule() {
             <!-- Kontener Wyjściowy Diagnozy Lokalnej Offline -->
             <div id="medical-diagnostics-output" style="margin-bottom: 24px;"></div>
 
-            <!-- Sekcja Bazy Wiedzy (24 Scenariusze) -->
+            <!-- Sekcja Bazy Wiedzy (30 Scenariuszy) -->
             <div id="specialist-kb-section" style="margin-top: 20px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
                     <div>
                         <h3 style="color: var(--text-primary); margin: 0; font-size: 1.15rem;">
-                            📚 Encyklopedia Scenariuszy Diagnostycznych i SQL
+                            📚 Encyklopedia Scenariuszy Diagnostycznych, SQL i Ansible
                         </h3>
                         <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 2px 0 0 0;">
-                            Wybierz system, aby przeglądać gotowe szablony procedur, objawy, root-cause i zapytania SQL.
+                            Wybierz system, aby przeglądać gotowe szablony procedur, objawy, root-cause, zapytania SQL oraz playbooki Ansible.
                         </p>
                     </div>
                 </div>
