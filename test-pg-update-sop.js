@@ -226,7 +226,14 @@ assert.ok(contentEl.innerHTML.includes('Zaktualizowana Procedura Standardowa (SO
 assert.ok(contentEl.innerHTML.includes('rc-status'), 'Wyjście procedury musi zawierać polecenie rc-status');
 assert.ok(contentEl.innerHTML.includes('>bash</span>') && contentEl.innerHTML.includes('>sql</span>'), 'Wyjście procedury musi renderować nowoczesne etykiety bloków kodu bash oraz sql');
 assert.ok(contentEl.innerHTML.includes('Quality Gates'), 'Wyjście procedury musi zawierać bramki jakościowe Quality Gates');
-console.log('✅ DOM RENDER: Kontener i podzakładka procedury z nowoczesnym layoutem zostały poprawnie zrenderowane');
+
+// Weryfikacja braku błędu "color: rgb..." oraz poprawności podświetlenia kodu
+assert.strictEqual(contentEl.innerHTML.includes('"color: rgb'), false, 'HTML nie może zawierać zepsutych atrybutów style ani wycieku kodu CSS do treści komend');
+assert.ok(contentEl.innerHTML.includes('>rc-status</code>'), 'rc-status musi być czystą komendą w bloku code');
+assert.ok(contentEl.innerHTML.includes('>psql -U postgres</code>'), 'psql -U postgres musi być czystą komendą w bloku code');
+assert.ok(contentEl.innerHTML.includes('>SELECT</span> * <span style="color: #58a6ff;">FROM</span>'), 'SELECT i FROM w zapytaniu SQL muszą być prawidłowo podświetlone na niebiesko');
+assert.ok(contentEl.innerHTML.includes("<span style=\"color: #7ee787;\">'centrum'</span>"), "'centrum' w zapytaniu SQL musi być prawidłowo podświetlone na zielono");
+console.log('✅ DOM RENDER & HIGHLIGHT INTEGRITY: Brak wycieków CSS, kod jest w 100% czysty i zgodny 1:1 ze zrzutem');
 
 // === TEST 10: Zapis do Bazy Runbooków ===
 console.log('\n=== TEST 10: Weryfikacja Eksportu Procedury do Bazy Runbooków ===');

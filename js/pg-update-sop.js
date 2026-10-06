@@ -38,20 +38,32 @@
     }
   };
 
-  // Podświetlanie składni dla bloków kodu w stylu nowoczesnej dokumentacji
+  // Podświetlanie składni dla bloków kodu w stylu nowoczesnej dokumentacji (zgodne 1:1 ze zrzutem)
   const highlightCode = function (code, lang) {
     if (!code) return '';
     let escaped = escapeHtml(code);
     if (lang === 'sql') {
-      escaped = escaped.replace(/\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AND|OR|NOT|IN|LIKE|IS|NULL|ORDER|BY|GROUP|HAVING|LIMIT|AS|DISTINCT|COUNT|ALTER|TABLE|ADD|COLUMN|INSERT|INTO|VALUES|DROP|VIEW|RENAME|TO|BEGIN|COMMIT|ROLLBACK|VACUUM|FULL|VERBOSE|DO|CREATE|DATABASE|OWNER)\b/g, '<span style="color: rgb(56, 189, 248); font-weight: 600;">$1</span>');
-      escaped = escaped.replace(/'([^']*)'/g, '<span style="color: rgb(163, 230, 53);">\'$1\'</span>');
-      escaped = escaped.replace(/(^|\s)(--.*$)/gm, '$1<span style="color: rgb(100, 116, 139);">$2</span>');
-    } else if (lang === 'bash' || lang === 'sh') {
-      escaped = escaped.replace(/(^|\s)(-[a-zA-Z0-9_-]+)/g, '$1<span style="color: rgb(245, 158, 11); font-weight: 600;">$2</span>');
-      escaped = escaped.replace(/\b(rc-status|psql|sed|head|tail|chmod|chown|mkdir|cp|rm|tar|scp|ssh|rsync|wine|systemctl|createdb|pg_dump|pg_restore|service|bash|cd|ls|cat)\b/g, '<span style="color: rgb(56, 189, 248); font-weight: 600;">$1</span>');
-      escaped = escaped.replace(/'([^']*)'/g, '<span style="color: rgb(163, 230, 53);">\'$1\'</span>');
-      escaped = escaped.replace(/"([^"]*)"/g, '<span style="color: rgb(163, 230, 53); font-weight: 500;">"$1"</span>');
-      escaped = escaped.replace(/(^|\s)(#.*$)/gm, '$1<span style="color: rgb(100, 116, 139);">$2</span>');
+      const tokens = [];
+      // 1. Zabezpieczenie stringów w apostrofach
+      escaped = escaped.replace(/'([^']*)'/g, function (m) {
+        const id = tokens.length;
+        tokens.push('<span style="color: #7ee787;">' + m + '</span>');
+        return '___SQL_TOK_' + id + '___';
+      });
+      // 2. Podświetlenie słów kluczowych SQL
+      escaped = escaped.replace(/\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AND|OR|NOT|IN|LIKE|IS|NULL|ORDER|BY|GROUP|HAVING|LIMIT|AS|DISTINCT|COUNT|ALTER|TABLE|ADD|COLUMN|INSERT|INTO|VALUES|DROP|VIEW|RENAME|TO|BEGIN|COMMIT|ROLLBACK|VACUUM|FULL|VERBOSE|DO|CREATE|DATABASE|OWNER)\b/g, '<span style="color: #58a6ff;">$1</span>');
+      // 3. Komentarze SQL
+      escaped = escaped.replace(/(^|\n)(--.*$)/gm, '$1<span style="color: #8b949e;">$2</span>');
+      // 4. Przywrócenie stringów
+      escaped = escaped.replace(/___SQL_TOK_(\d+)___/g, function (_, id) {
+        return tokens[parseInt(id, 10)];
+      });
+      return escaped;
+    }
+    if (lang === 'bash' || lang === 'sh') {
+      // W Bashu kod jest czytelny i czysty (jak na zrzucie ekranu), ewentualne komentarze na szaro
+      escaped = escaped.replace(/(^|\n)(#.*$)/gm, '$1<span style="color: #8b949e;">$2</span>');
+      return escaped;
     }
     return escaped;
   };
@@ -93,12 +105,12 @@
       id: 'step_1',
       number: '1',
       title: 'Weryfikacja zerowej liczby połączeń & Kontrola usługi PostgreSQL',
-      titleFormatted: 'Weryfikacja i Odcięcie Połączeń do Bazy <span style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.3); font-family: var(--font-mono, monospace); font-size: 0.95rem;">centrum</span>',
+      titleFormatted: 'Weryfikacja i Odcięcie Połączeń do Bazy <span style="background: #2a2215; color: #e3b341; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-size: 0.95rem; font-weight: 600;">centrum</span>',
       badge: 'Zero-Connection Policy',
       badgeColor: '#ef476f',
       estimatedTime: '3-5 min',
       summary: 'Sprawdzenie czy żaden klient nie korzysta z bazy centrum, weryfikacja usług przez rc-status oraz zatrzymanie i uruchomienie usługi PostgreSQL (OpenRC na Gentoo lub systemd na Debian/Ubuntu).',
-      descriptionHtml: 'Przed jakąkolwiek ingerencją w strukturę tabel (np. <code style="color: rgb(56, 189, 248); background: rgba(56, 189, 248, 0.1); padding: 1px 5px; border-radius: 3px;">ALTER TABLE</code>) konieczne jest wyczyszczenie wiszących sesji aplikacji i modułów peryferyjnych. Jeżeli jakikolwiek proces trzyma blokadę na tabeli <code style="color: rgb(163, 230, 53); background: rgba(163, 230, 53, 0.1); padding: 1px 5px; border-radius: 3px;">zlecenia</code>, <code style="color: rgb(163, 230, 53); background: rgba(163, 230, 53, 0.1); padding: 1px 5px; border-radius: 3px;">wykonania</code> czy <code style="color: rgb(163, 230, 53); background: rgba(163, 230, 53, 0.1); padding: 1px 5px; border-radius: 3px;">wyniki</code>, transakcja migracyjna zawiśnie w oczekiwaniu na lock lub spowoduje deadlock.',
+      descriptionHtml: 'Aktualizacja schematu bazy (skrypty SQL z <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">ALTER TABLE</span> , dropowaniem widoków itp.) wymaga wyłącznego dostępu do tabel ( <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">zlecenia</span> , <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">wykonania</span> , <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">wyniki</span> ). Jakiekolwiek aktywne połączenie spowoduje <strong style="color: #ffffff;">deadlock</strong> i zawieszenie aktualizacji na wiele godzin.',
       why: 'Modyfikacja schematu (DDL, ALTER TABLE, triggery) wymaga wyłącznych blokad (ACCESS EXCLUSIVE). Jakiekolwiek wiszące połączenie zablokuje migrację w nieskończoność lub spowoduje błąd deadlock.',
       adrianNote: 'Adrian Wojtkowski podkreśla: przed zalogowaniem sprawdza usługi przez rc-status (czy coś nie jest już pozatrzymywane), a w konsoli psql uruchamia po prostu SELECT * FROM pg_stat_activity WHERE datname = \'centrum\';. Nie potrzebujemy wypisywać wielu kolumn (pid, usename, state...), ponieważ w terminalu chodzi o natychmiastowy rzut oka na wynik: ma być dokładnie „(0 rows)”. Jeśli wiszą sesje aplikacji, zatrzymujemy usługę (/etc/init.d/postgresql-11 stop) lub zrzucamy sesje i uruchamiamy ponownie.',
       substeps: [
@@ -108,7 +120,7 @@
           lang: 'bash'
         },
         {
-          label: '2. Zaloguj się do bazy jako administrator postgres :',
+          label: '2. Zaloguj się do bazy jako administrator <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">postgres</span> :',
           cmd: 'psql -U postgres',
           lang: 'bash'
         },
@@ -120,8 +132,8 @@
         {
           label: '4. Ocena wyniku:',
           bullets: [
-            'Jeśli widzisz <code style="color: rgb(163, 230, 53); font-weight: bold;">(0 rows)</code> ➔ Masz czysto, nikt nie blokuje bazy, możesz kontynuować.',
-            'Jeśli widzisz aktywne sesje aplikacji (np. <code style="color: rgb(245, 158, 11);">centrum.exe</code>, <code style="color: rgb(245, 158, 11);">lab.exe</code>, <code style="color: rgb(245, 158, 11);">mirth-connect</code>) ➔ Zakończ je lub zatrzymaj usługi przed procedurą!'
+            '• Jeśli widzisz <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">(0 rows)</span> (lub ewentualnie procesy replikacji / <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">walwriter</span> , które nie blokują DDL) <strong style="color: #ffffff;">➔ Masz czysto, przechodzisz od razu do KROKU 2.</strong>',
+            '• Jeśli widzisz jakiekolwiek wiersze sesji aplikacyjnych <strong style="color: #ffffff;">➔ Połączenia muszą zostać natychmiast zrzucone.</strong>'
           ]
         },
         {
@@ -245,12 +257,12 @@
       id: 'step_2',
       number: '2',
       title: 'Przygotowanie katalogu roboczego & Trik z tabelą „wersja”',
-      titleFormatted: 'Przygotowanie Katalogu Roboczego & Trik z Tabelą <span style="background: rgba(255, 183, 3, 0.15); color: #ffb703; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(255, 183, 3, 0.3); font-family: var(--font-mono, monospace); font-size: 0.95rem;">wersja</span>',
+      titleFormatted: 'Przygotowanie Katalogu Roboczego & Trik z Tabelą <span style="background: #2a2215; color: #e3b341; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-size: 0.95rem; font-weight: 600;">wersja</span>',
       badge: 'SQL Schema Trick',
       badgeColor: '#ffb703',
       estimatedTime: '5-10 min',
       summary: 'Utworzenie katalogu wersji w /home/lab/marcel/service/, rozpakowanie paczki aktualizacji oraz kluczowa modyfikacja pierwszego pliku SQL.',
-      descriptionHtml: 'Aktualizacje LIS Marcel często przeskakują o kilka wydań (np. z <code style="color: rgb(56, 189, 248);">5.2.0</code> do <code style="color: rgb(56, 189, 248);">5.3.2</code>). W pierwszym pliku SQL znajduje się wpis podbijający numer wersji, który może wywołać konflikt klucza unikalnego i zatrzymać skrypt instalacyjny.',
+      descriptionHtml: 'Aktualizacje LIS Marcel często przeskakują o kilka wydań (np. z <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">5.2.0</span> do <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">5.3.2</span>). W pierwszym pliku SQL znajduje się wpis podbijający numer wersji, który może wywołać konflikt klucza unikalnego i zatrzymać skrypt instalacyjny.',
       why: 'Aktualizacje LIS Marcel często przeskakują o kilka wydań (np. z 5.2.0 do 5.3.2). W pierwszym pliku SQL znajduje się wpis podbijający numer wersji, który może wywołać konflikt klucza unikalnego i zatrzymać skrypt instalacyjny.',
       adrianNote: 'Trik Adriana Wojtkowskiego: „W pierwszym pliku SQL (np. 5.2.1.sql) wycinamy pierwszą linijkę INSERT INTO wersja..., żeby nie wywaliło błędu unikalności lub kolizji, a pozostałe instrukcje DDL (ALTER TABLE, procedury, triggery) się wykonały. Kolejne pliki (5.2.2.sql aż do 5.3.2.sql) bez problemu zaktualizują wersję do wartości docelowej”.',
       substeps: [
@@ -277,8 +289,8 @@
         {
           label: '5. Ocena wyniku:',
           bullets: [
-            'Upewnij się, że polecenie <code>head -n 5</code> nie pokazuje wpisu <code>INSERT INTO wersja</code> na samej górze pliku.',
-            'Kolejne pliki migracyjne (5.2.2.sql -> 5.3.2.sql) prawidłowo i automatycznie zaktualizują tabelę wersja do stanu docelowego.'
+            '• Upewnij się, że polecenie <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">head -n 5</span> nie pokazuje wpisu <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">INSERT INTO wersja</span> na samej górze pliku.',
+            '• Kolejne pliki migracyjne (5.2.2.sql ➔ 5.3.2.sql) <strong style="color: #ffffff;">➔ Prawidłowo i automatycznie zaktualizują tabelę wersja do stanu docelowego.</strong>'
           ]
         }
       ],
@@ -315,12 +327,12 @@
       id: 'step_3',
       number: '3',
       title: 'Wykonanie skryptu aktualizacyjnego (update.sh)',
-      titleFormatted: 'Wykonanie Skryptu Aktualizacyjnego <span style="background: rgba(58, 134, 255, 0.15); color: #60a5fa; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(58, 134, 255, 0.3); font-family: var(--font-mono, monospace); font-size: 0.95rem;">update.sh</span>',
+      titleFormatted: 'Wykonanie Skryptu Aktualizacyjnego <span style="background: #2a2215; color: #e3b341; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-size: 0.95rem; font-weight: 600;">update.sh</span>',
       badge: 'Database Migration',
       badgeColor: '#3a86ff',
       estimatedTime: '5-15 min',
       summary: 'Uruchomienie skryptu update.sh, który sekwencyjnie wykonuje wszystkie pliki SQL na bazie centrum i rejestruje logi.',
-      descriptionHtml: 'Skrypt <code>update.sh</code> aplikuje zmiany w strukturze tabel, nowe indeksy, funkcje PL/pgSQL oraz konwersje danych medycznych w bazie danych <code>centrum</code>.',
+      descriptionHtml: 'Skrypt <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">update.sh</span> aplikuje zmiany w strukturze tabel, nowe indeksy, funkcje PL/pgSQL oraz konwersje danych medycznych w bazie danych <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">centrum</span>.',
       why: 'Skrypt update.sh aplikuje zmiany w strukturze tabel, nowe indeksy, funkcje PL/pgSQL oraz konwersje danych medycznych.',
       adrianNote: 'Zawsze obserwuj wyjście terminala podczas działania update.sh. Jeśli skrypt zatrzyma się z błędem, sprawdź numer linii w pliku SQL. Dzięki wcześniejszemu wycięciu kolizyjnego INSERT-a do tabeli wersja skrypt przechodzi gładko.',
       substeps: [
@@ -342,8 +354,8 @@
         {
           label: '4. Ocena wyniku:',
           bullets: [
-            'Brak błędów krytycznych (<code style="color: rgb(239, 71, 111);">FATAL</code>, <code style="color: rgb(239, 71, 111);">ERROR: relation does not exist</code>) w strumieniu wyjścia.',
-            'Tabela <code>wersja</code> wskazuje nową, docelową wersję oprogramowania LIS (np. 5.3.2).'
+            '• Brak błędów krytycznych (<span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">FATAL</span>, <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">ERROR: relation does not exist</span>) w strumieniu wyjścia <strong style="color: #ffffff;">➔ Logi są czyste.</strong>',
+            '• Tabela <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">wersja</span> wskazuje nową, docelową wersję oprogramowania LIS (np. <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">5.3.2</span>).'
           ]
         }
       ],
@@ -374,12 +386,12 @@
       id: 'step_4',
       number: '4',
       title: 'Wymiana centrum.exe, uprawnienia i podpisanie licencji (Wine / kgp.exe)',
-      titleFormatted: 'Wymiana <span style="background: rgba(131, 56, 236, 0.15); color: #c084fc; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(131, 56, 236, 0.3); font-family: var(--font-mono, monospace); font-size: 0.95rem;">centrum.exe</span>, Uprawnienia i Podpisanie Licencji (Wine / kgp.exe)',
+      titleFormatted: 'Wymiana <span style="background: #2a2215; color: #e3b341; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-size: 0.95rem; font-weight: 600;">centrum.exe</span>, Uprawnienia i Podpisanie Licencji (Wine / kgp.exe)',
       badge: 'Binary & License Bit',
       badgeColor: '#8338ec',
       estimatedTime: '5 min',
       summary: 'Podmiana pliku centrum.exe, nadanie uprawnień lab:users (755) oraz aktywacja binarnego bitu licencji za pomocą Wine i kgp.exe.',
-      descriptionHtml: 'Plik <code>centrum.exe</code> jest binarką Windows uruchamianą na serwerze i udostępnianą stacjom roboczym. Bez aktywacji bitu licencyjnego przez <code style="color: rgb(192, 132, 252);">kgp.exe -a</code> aplikacja blokuje użytkowników (tzw. ekran „czerwonej czaszki” / brak licencji).',
+      descriptionHtml: 'Plik <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">centrum.exe</span> jest binarką Windows uruchamianą na serwerze i udostępnianą stacjom roboczym. Bez aktywacji bitu licencyjnego przez <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">kgp.exe -a</span> aplikacja blokuje użytkowników (tzw. ekran „czerwonej czaszki” / brak licencji).',
       why: 'Plik centrum.exe jest binarką Windows uruchamianą na serwerze i udostępnianą stacjom. Bez aktywacji bitu licencyjnego przez kgp.exe -a aplikacja blokuje użytkowników (tzw. ekran „czerwonej czaszki” / brak licencji).',
       adrianNote: 'Adrian Wojtkowski tłumaczy: „Program kgp.exe z flagą -a centrum.exe modyfikuje specyficzny bit w nagłówku/kodzie binarki PE pliku wykonywalnego oraz aktualizuje skojarzony plik .key. Bez uruchomienia tego przez Wine, centrum.exe nie odpali się u klientów i zgłosi błąd braku autoryzacji licencji”.',
       substeps: [
@@ -411,8 +423,8 @@
         {
           label: '6. Ocena wyniku:',
           bullets: [
-            'Komenda <code>wine kgp.exe -a centrum.exe</code> zakończyła się sukcesem bez błędów konsoli Wine.',
-            'Plik <code>centrum.exe</code> oraz powiązany plik <code>.key</code> mają świeży znacznik czasu modyfikacji.'
+            '• Komenda <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">wine kgp.exe -a centrum.exe</span> zakończyła się sukcesem bez błędów konsoli Wine.',
+            '• Plik <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">centrum.exe</span> oraz powiązany plik <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">.key</span> <strong style="color: #ffffff;">➔ Mają świeży znacznik czasu modyfikacji.</strong>'
           ]
         }
       ],
@@ -455,12 +467,12 @@
       id: 'step_5',
       number: '5',
       title: 'Obsługa serwerów satelitarnych Alab (RDP & serwer CZA marcele.pl)',
-      titleFormatted: 'Obsługa Serwerów Satelitarnych Alab (RDP & Serwer CZA <span style="background: rgba(0, 180, 216, 0.15); color: #38bdf8; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(0, 180, 216, 0.3); font-family: var(--font-mono, monospace); font-size: 0.95rem;">marcele.pl</span>)',
+      titleFormatted: 'Obsługa Serwerów Satelitarnych Alab (RDP & Serwer CZA <span style="background: #2a2215; color: #e3b341; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-size: 0.95rem; font-weight: 600;">marcele.pl</span>)',
       badge: 'Alab Satellite Topology',
       badgeColor: '#00b4d8',
       estimatedTime: '10-15 min',
       summary: 'Procedura dla serwerów terminalowych RDP (Debian) oraz serwerów CZA (marcele.pl dla mikroskopistów zdalnych), które nie posiadają zainstalowanego Wine.',
-      descriptionHtml: 'Serwery terminalowe Alab pracują na czystym Debianie bez zainstalowanego Wine. Nie można na nich bezpośrednio uruchomić <code>kgp.exe -a</code>, dlatego klucz przenosi się na maszynę Gentoo.',
+      descriptionHtml: 'Serwery terminalowe Alab pracują na czystym Debianie bez zainstalowanego Wine. Nie można na nich bezpośrednio uruchomić <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">kgp.exe -a</span>, dlatego klucz przenosi się na maszynę Gentoo.',
       why: 'Serwery terminalowe Alab pracują na czystym Debianie bez zainstalowanego Wine. Nie można na nich bezpośrednio uruchomić kgp.exe -a.',
       adrianNote: 'Workflow Adriana dla Alab: 1. Pobieramy plik klucza .key z serwera Debian na główny serwer bazodanowy Gentoo (gdzie jest Wine). 2. Na serwerze Gentoo odpalamy wine kgp.exe -a centrum.exe z pobranym kluczem. 3. Odsyłamy podpisany centrum.exe oraz zaktualizowany .key z powrotem na serwer RDP/CZA. 4. Nadajemy chown lab:users i chmod 755.',
       substeps: [
@@ -487,8 +499,8 @@
         {
           label: '5. Ocena wyniku:',
           bullets: [
-            'Plik licencyjny <code>.key</code> oraz podpisany <code>centrum.exe</code> znajdują się na maszynie RDP i CZA z prawami <code>755</code>.',
-            'Zdalni pracownicy i mikroskopiści mogą zalogować się do systemu bez blokady licencji.'
+            '• Plik licencyjny <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">.key</span> oraz podpisany <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">centrum.exe</span> znajdują się na maszynie RDP i CZA z prawami <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">755</span>.',
+            '• Zdalni pracownicy i mikroskopiści <strong style="color: #ffffff;">➔ Mogą zalogować się do systemu bez blokady licencji.</strong>'
           ]
         }
       ],
@@ -525,12 +537,12 @@
       id: 'step_6',
       number: '6',
       title: 'Czyszczenie powdrożeniowe, weryfikacja i dokumentacja Jira',
-      titleFormatted: 'Czyszczenie Powdrożeniowe, Weryfikacja i Dokumentacja <span style="background: rgba(6, 214, 160, 0.15); color: #06d6a0; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(6, 214, 160, 0.3); font-family: var(--font-mono, monospace); font-size: 0.95rem;">Jira</span>',
+      titleFormatted: 'Czyszczenie Powdrożeniowe, Weryfikacja i Dokumentacja <span style="background: #2a2215; color: #e3b341; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-size: 0.95rem; font-weight: 600;">Jira</span>',
       badge: 'Post-Deploy & Audit',
       badgeColor: '#06d6a0',
       estimatedTime: '5 min',
       summary: 'Usunięcie skryptów instalacyjnych i kgp.exe z katalogu produkcyjnego klienta, wznowienie usług peryferyjnych oraz wpis audytowy w zgłoszeniu Jira.',
-      descriptionHtml: 'Pozostawienie narzędzia <code>kgp.exe</code> (key generator) oraz skryptów <code>update.sh</code> w katalogu produkcyjnym stwarza ryzyko naruszenia bezpieczeństwa oraz przypadkowego ponownego uruchomienia.',
+      descriptionHtml: 'Pozostawienie narzędzia <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">kgp.exe</span> (key generator) oraz skryptów <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">update.sh</span> w katalogu produkcyjnym stwarza ryzyko naruszenia bezpieczeństwa oraz przypadkowego ponownego uruchomienia.',
       why: 'Pozostawienie narzędzia kgp.exe (key generator) oraz skryptów update.sh w katalogu produkcyjnym stwarza ryzyko naruszenia bezpieczeństwa oraz przypadkowego ponownego uruchomienia.',
       adrianNote: 'Adrian Wojtkowski zaznacza: po zakończeniu zawsze usuwamy ze środowiska klienta plik kgp.exe oraz update.sh. Klient nie powinien mieć dostępu do generatora licencji. Następnie uruchamiamy klienta z jednego stanowiska testowego i dokumentujemy wersję w tickecie.',
       substeps: [
@@ -552,9 +564,9 @@
         {
           label: '4. Ocena wyniku i audyt:',
           bullets: [
-            'Plik <code>kgp.exe</code> bezwzględnie usunięty z katalogu produkcyjnego klienta.',
-            'Usługi peryferyjne (Samba, Mirth, VNC) pracują w stanie aktywnym.',
-            'Zgłoszenie Jira zaktualizowane o numer wersji, datę i czas przestoju (Downtime).'
+            '• Plik <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">kgp.exe</span> <strong style="color: #ffffff;">➔ Bezwzględnie usunięty z katalogu produkcyjnego klienta.</strong>',
+            '• Usługi peryferyjne (Samba, Mirth, VNC) <strong style="color: #ffffff;">➔ Pracują w stanie aktywnym.</strong>',
+            '• Zgłoszenie Jira <strong style="color: #ffffff;">➔ Zaktualizowane o numer wersji, datę i czas przestoju (Downtime).</strong>'
           ]
         }
       ],
@@ -989,27 +1001,26 @@
   /**
    * Pomocnik renderujący nowoczesny blok kodu w stylu IDE / dokumentacji technicznej
    */
+  /**
+   * Pomocnik renderujący nowoczesny blok kodu w stylu IDE / dokumentacji technicznej (zgodny 1:1 ze zrzutem)
+   */
   function renderCodeBox(cmdId, label, cmd, lang) {
     const langLabel = (lang === 'sql') ? 'sql' : 'bash';
     return `
-      <div style="border: 1px solid #1e293b; border-radius: 8px; background: #0b1120; margin-bottom: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);">
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 14px; background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid #1e293b; font-size: 0.75rem; color: #94a3b8; font-family: var(--font-mono, monospace);">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="color: rgb(56, 189, 248); font-weight: 700;">#</span>
-            <span style="font-weight: 600; text-transform: lowercase;">${langLabel}</span>
-            ${label ? `<span style="color: #64748b; margin-left: 8px; font-family: var(--font-sans, sans-serif); font-weight: 500;">${escapeHtml(label)}</span>` : ''}
-          </div>
-          <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('${cmdId}')" style="font-size: 0.75rem; padding: 2px 10px; background: #1e293b; border: 1px solid #334155; color: #e2e8f0; cursor: pointer; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-            <span>📋</span> Kopiuj
+      <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; margin: 8px 0 16px 0; overflow: hidden;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 16px 4px 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.82rem; color: #8b949e;">
+          <span>${langLabel}</span>
+          <button onclick="window.copyPgSopText('${cmdId}')" style="background: transparent; border: none; color: #8b949e; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-size: 0.85rem; padding: 2px 4px; border-radius: 4px; transition: color 0.15s ease;" title="Kopiuj polecenie" onmouseover="this.style.color='#f0f6fc'" onmouseout="this.style.color='#8b949e'">
+            <span style="opacity: 0.7; font-size: 0.8rem;">@</span> 📋
           </button>
         </div>
-        <pre style="margin: 0; padding: 12px 16px; overflow-x: auto; background: #0b1120;"><code id="${cmdId}" style="font-family: var(--font-mono, monospace); font-size: 0.9rem; line-height: 1.5; color: #f1f5f9; white-space: pre;">${highlightCode(cmd, langLabel)}</code></pre>
+        <pre style="margin: 0; padding: 4px 16px 14px 16px; background: transparent; overflow-x: auto;"><code id="${cmdId}" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.92rem; line-height: 1.5; color: #e6edf3; white-space: pre;">${highlightCode(cmd, langLabel)}</code></pre>
       </div>
     `;
   }
 
   /**
-   * Renderowanie podpunktów i komend kroku SOP
+   * Renderowanie podpunktów i komend kroku SOP (czysty układ zgodny ze zrzutem ekranu)
    */
   function renderStepSubsteps(step) {
     if (!step.substeps || step.substeps.length === 0) {
@@ -1023,29 +1034,27 @@
     step.substeps.forEach((sub, sIdx) => {
       if (sub.bullets) {
         html += `
-          <div style="margin-top: 14px; margin-bottom: 14px;">
-            <div style="font-size: 0.88rem; font-weight: 600; color: #f1f5f9; margin-bottom: 8px;">
+          <div style="margin-top: 18px; margin-bottom: 16px;">
+            <div style="font-size: 0.95rem; font-weight: 600; color: #f0f6fc; margin-bottom: 8px;">
               ${escapeHtml(sub.label)}
             </div>
-            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid #1e293b; border-radius: 8px; padding: 12px 18px;">
-              <ul style="margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 0.88rem; line-height: 1.6;">
-                ${sub.bullets.map(b => `<li style="margin-bottom: 4px;">${b}</li>`).join('')}
-              </ul>
-            </div>
+            <ul style="margin: 6px 0 0 0; padding-left: 20px; list-style-type: none; color: #c9d1d9; font-size: 0.92rem; line-height: 1.6;">
+              ${sub.bullets.map(b => `<li style="margin-bottom: 8px;">${b}</li>`).join('')}
+            </ul>
           </div>
         `;
       } else if (sub.items) {
         html += `
-          <div style="margin-top: 16px; margin-bottom: 14px;">
-            <div style="font-size: 0.88rem; font-weight: 600; color: #f1f5f9; margin-bottom: 10px;">
+          <div style="margin-top: 18px; margin-bottom: 16px;">
+            <div style="font-size: 0.95rem; font-weight: 600; color: #f0f6fc; margin-bottom: 8px;">
               ${escapeHtml(sub.label)}
             </div>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
               ${sub.items.map((it, iIdx) => {
                 const cmdId = `sop-cmd-${step.id}-s${sIdx}-i${iIdx}`;
                 return `
                   <div>
-                    ${it.sublabel ? `<div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 4px; font-weight: 500;">${escapeHtml(it.sublabel)}</div>` : ''}
+                    ${it.sublabel ? `<div style="font-size: 0.85rem; color: #8b949e; margin: 6px 0 4px 0; font-weight: 500;">${escapeHtml(it.sublabel)}</div>` : ''}
                     ${renderCodeBox(cmdId, '', it.cmd, it.lang || 'bash')}
                   </div>
                 `;
@@ -1056,9 +1065,9 @@
       } else if (sub.cmd) {
         const cmdId = `sop-cmd-${step.id}-s${sIdx}`;
         html += `
-          <div style="margin-top: 14px; margin-bottom: 14px;">
-            <div style="font-size: 0.88rem; font-weight: 600; color: #f1f5f9; margin-bottom: 6px;">
-              ${escapeHtml(sub.label)}
+          <div style="margin-top: 18px; margin-bottom: 8px;">
+            <div style="font-size: 0.95rem; font-weight: 600; color: #f0f6fc; margin-bottom: 8px;">
+              ${sub.label}
             </div>
             ${renderCodeBox(cmdId, '', sub.cmd, sub.lang || 'bash')}
           </div>
@@ -1070,7 +1079,7 @@
   }
 
   /**
-   * 1. PODZAKŁADKA: PROCEDURA KROK PO KROKU
+   * 1. PODZAKŁADKA: PROCEDURA KROK PO KROKU (Styl dokumentacji 1:1 ze zrzutem ekranu)
    */
   function renderProcedureTab(container) {
     let stepsHtml = '';
@@ -1086,88 +1095,71 @@
         checklistHtml += `
           <label style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; cursor: pointer; font-size: 0.86rem;">
             <input type="checkbox" data-sop-item-key="${itemKey}" data-sop-step-id="${step.id}" ${itemChecked ? 'checked' : ''} style="margin-top: 3px; cursor: pointer;">
-            <span style="${itemChecked ? 'text-decoration: line-through; color: var(--text-muted);' : 'color: #cbd5e1;'}">${escapeHtml(item)}</span>
+            <span style="${itemChecked ? 'text-decoration: line-through; color: var(--text-muted);' : 'color: #c9d1d9;'}">${escapeHtml(item)}</span>
           </label>
         `;
       });
 
       stepsHtml += `
-        <div class="card" style="margin-bottom: 28px; background: #0f172a; border: 1px solid #1e293b; border-left: 4px solid ${step.badgeColor}; border-radius: 10px; padding: 22px; ${isDone ? 'opacity: 0.9;' : ''}">
+        <div style="margin-bottom: 36px;">
           
-          <!-- Nagłówek kroku -->
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <div style="width: 34px; height: 34px; border-radius: 50%; background: ${step.badgeColor}; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
-                ${isDone ? '✓' : step.number}
-              </div>
-              <div>
-                <h3 style="margin: 0; font-size: 1.18rem; font-weight: 700; color: #f8fafc;">
-                  KROK ${step.number}: ${step.titleFormatted || escapeHtml(step.title)}
-                </h3>
-                <div style="display: flex; gap: 10px; align-items: center; margin-top: 6px;">
-                  <span class="badge" style="background: ${step.badgeColor}22; color: ${step.badgeColor}; border: 1px solid ${step.badgeColor}44; font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 4px;">
-                    ${escapeHtml(step.badge)}
-                  </span>
-                  <span style="font-size: 0.75rem; color: #94a3b8;">
-                    ⏱️ Czas: <strong>${escapeHtml(step.estimatedTime)}</strong>
-                  </span>
-                </div>
-              </div>
-            </div>
+          <!-- Nagłówek kroku: KROK N: Tytuł -->
+          <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 1.18rem; font-weight: 700; color: #f0f6fc; letter-spacing: -0.01em;">
+              KROK ${step.number}: ${step.titleFormatted || escapeHtml(step.title)}
+            </h3>
 
             <!-- Przełącznik zaliczenia kroku -->
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; background: #1e293b; padding: 6px 14px; border-radius: 6px; border: 1px solid #334155; font-size: 0.82rem; font-weight: 600; color: #e2e8f0; transition: background 0.2s ease;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; background: #161b22; padding: 4px 10px; border-radius: 6px; border: 1px solid #30363d; font-size: 0.78rem; font-weight: 500; color: #8b949e;">
               <input type="checkbox" data-sop-step-toggle="${step.id}" ${isDone ? 'checked' : ''} style="cursor: pointer;">
               <span>Krok ${step.number} zaliczony</span>
             </label>
           </div>
 
           <!-- Opis kroku -->
-          <p style="color: #cbd5e1; font-size: 0.92rem; line-height: 1.6; margin: 0 0 16px 0;">
+          <p style="color: #c9d1d9; font-size: 0.92rem; line-height: 1.6; margin: 0 0 16px 0;">
             ${step.descriptionHtml || escapeHtml(step.summary)}
           </p>
 
-          <!-- Wiedza Adriana & Dlaczego to robimy -->
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-bottom: 20px;">
-            <div style="background: rgba(58, 134, 255, 0.08); border-left: 3px solid #3a86ff; padding: 12px 14px; border-radius: 0 6px 6px 0; font-size: 0.85rem;">
-              <strong style="color: #38bdf8; display: block; margin-bottom: 4px;">🎯 Dlaczego to robimy:</strong>
-              <div style="color: #94a3b8; line-height: 1.5;">${escapeHtml(step.why)}</div>
-            </div>
-            <div style="background: rgba(245, 158, 11, 0.08); border-left: 3px solid #f59e0b; padding: 12px 14px; border-radius: 0 6px 6px 0; font-size: 0.85rem;">
-              <strong style="color: #fbbf24; display: block; margin-bottom: 4px;">💡 Wiedza Adriana Wojtkowskiego:</strong>
-              <div style="color: #cbd5e1; line-height: 1.5;">${escapeHtml(step.adrianNote)}</div>
-            </div>
-          </div>
-
-          <!-- Podpunkty z nowoczesnymi blokami kodu -->
-          <div style="margin-bottom: 20px;">
+          <!-- Podpunkty z boksami kodu -->
+          <div style="margin-bottom: 16px;">
             ${renderStepSubsteps(step)}
           </div>
 
+          <!-- Wiedza Adriana & Dlaczego to robimy -->
+          <div style="margin: 20px 0; background: rgba(227, 179, 65, 0.06); border-left: 3px solid #e3b341; padding: 12px 16px; border-radius: 0 6px 6px 0; font-size: 0.88rem; color: #c9d1d9; line-height: 1.5;">
+            <strong style="color: #e3b341; display: block; margin-bottom: 4px;">💡 Wiedza Adriana Wojtkowskiego:</strong>
+            ${escapeHtml(step.adrianNote)}
+          </div>
+
           <!-- Quality Gates Checklist -->
-          <div style="background: #0b1120; padding: 14px 18px; border-radius: 8px; border: 1px solid #1e293b;">
-            <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-teal, #06d6a0); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+          <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px 18px; margin-top: 18px;">
+            <div style="font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #3fb950; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
               <span>✅</span> Lista kontrolna jakościowa (Quality Gates):
             </div>
             ${checklistHtml}
           </div>
+
+          <hr style="border: none; border-top: 1px solid #21262d; margin: 36px 0;">
 
         </div>
       `;
     });
 
     container.innerHTML = `
-      <div style="margin-bottom: 24px;">
-        <h2 style="font-size: 1.28rem; font-weight: 700; color: #f8fafc; margin: 0 0 10px 0; display: flex; align-items: center; gap: 10px;">
-          <span>📋</span> Zaktualizowana Procedura Standardowa (SOP): Aktualizacja Bazy PostgreSQL i Centrum
-        </h2>
-        <div style="font-size: 0.85rem; color: #94a3b8; line-height: 1.5;">
-          Oficjalny proces aktualizacji schematu bazy danych i aplikacji klienckiej w środowiskach laboratoryjnych i szpitalnych (autor: <strong>Adrian Wojtkowski</strong>). Każdy krok posiada czytelny schemat komend, ocenę wyników oraz bramki jakościowe (Quality Gates).
+      <div style="max-width: 960px; margin: 0 auto; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">
+        <div style="margin-bottom: 24px;">
+          <h2 style="font-size: 1.35rem; font-weight: 700; color: #f0f6fc; margin: 0 0 12px 0; display: flex; align-items: center; gap: 10px;">
+            <span>📋</span> Zaktualizowana Procedura Standardowa (SOP): Aktualizacja Bazy PostgreSQL i Centrum
+          </h2>
+          <div style="font-size: 0.88rem; color: #8b949e; line-height: 1.5;">
+            Oficjalny proces aktualizacji schematu bazy danych i aplikacji klienckiej w środowiskach laboratoryjnych i szpitalnych (autor: <strong>Adrian Wojtkowski</strong>). Każdy krok posiada czytelny schemat komend, ocenę wyników oraz bramki jakościowe (Quality Gates).
+          </div>
+          <hr style="border: none; border-top: 1px solid #21262d; margin: 16px 0 28px 0;">
         </div>
-        <hr style="border: 0; border-top: 1px solid #1e293b; margin: 16px 0 24px 0;">
-      </div>
-      <div>
-        ${stepsHtml}
+        <div>
+          ${stepsHtml}
+        </div>
       </div>
     `;
 
