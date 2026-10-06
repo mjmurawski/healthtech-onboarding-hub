@@ -3,7 +3,7 @@
  * 
  * Zakres testów:
  * 1. Struktura i integralność Bazy Wiedzy SOP (6 kroków procedury)
- * 2. Precyzja merytoryczna poleceń Adriana Wojtkowskiego (SELECT * FROM pg_stat_activity WHERE datname = 'centrum';)
+ * 2. Precyzja merytoryczna poleceń inżynierów SRE (SELECT * FROM pg_stat_activity WHERE datname = 'centrum';)
  * 3. Trik z tabelą wersja oraz obsługa kgp.exe -a centrum.exe przez Wine
  * 4. Procedura dla serwerów satelitarnych Alab (RDP Debian & CZA marcele.pl)
  * 5. Baza komend Ściągawki Terminalowej (kategorie, 1-Click copy, wyszukiwarka)
@@ -124,27 +124,27 @@ steps.forEach(step => {
   assert.ok(step.title, `Krok ${step.id} musi mieć tytuł`);
   assert.ok(step.summary, `Krok ${step.id} musi mieć podsumowanie`);
   assert.ok(step.why, `Krok ${step.id} musi mieć uzasadnienie (why)`);
-  assert.ok(step.adrianNote, `Krok ${step.id} musi mieć notatkę Adriana Wojtkowskiego`);
+  assert.ok(step.sreNote, `Krok ${step.id} musi mieć notatkę wytycznych SRE`);
   assert.ok(Array.isArray(step.commands) && step.commands.length > 0, `Krok ${step.id} musi zawierać komendy`);
   assert.ok(Array.isArray(step.checklistItems) && step.checklistItems.length > 0, `Krok ${step.id} musi zawierać punkty checklisty`);
   console.log(`  ✓ Krok ${step.number}: ${step.title} (${step.commands.length} komend, ${step.checklistItems.length} punktów kontrolnych)`);
 });
 console.log('✅ STRUKTURA KROKÓW: Wszystkie 6 kroków są w 100% kompletne');
 
-// === TEST 3: Precyzja komendy zero-connection check Adriana Wojtkowskiego & Kontrola Usług ===
-console.log('\n=== TEST 3: Weryfikacja Zero-Connection Check & Kontroli Usług (Adrian Wojtkowski) ===');
+// === TEST 3: Precyzja komendy zero-connection check Inżynierów SRE & Kontrola Usług ===
+console.log('\n=== TEST 3: Weryfikacja Zero-Connection Check & Kontroli Usług (Wytyczne SRE) ===');
 const step1 = steps.find(s => s.id === 'step_1');
 const checkCmd = step1.commands.find(c => c.cmd.includes("SELECT * FROM pg_stat_activity WHERE datname = 'centrum';"));
 assert.ok(checkCmd, "Krok 1 musi zawierać dokładne zapytanie: SELECT * FROM pg_stat_activity WHERE datname = 'centrum';");
-assert.ok(step1.adrianNote.includes('(0 rows)'), "Krok 1 musi tłumaczyć wymóg szybkiego sprawdzenia (0 rows)");
+assert.ok(step1.sreNote.includes('(0 rows)'), "Krok 1 musi tłumaczyć wymóg szybkiego sprawdzenia (0 rows)");
 
-// Logowanie SSH z agent forwarding (-A) (z nagrania Adriana Wojtkowskiego)
+// Logowanie SSH z agent forwarding (-A) (z wytycznych inżynierów SRE)
 assert.ok(step1.commands.some(c => c.cmd.includes('ssh -A root@')), 'Krok 1 musi zawierać logowanie ssh z flagą -A (Agent Forwarding)');
-assert.ok(step1.adrianNote.includes('-A') || step1.adrianNote.includes('ssh -A'), 'Krok 1 w notatce Adriana musi wyjaśniać użycie flagi -A do przekazywania agenta SSH');
+assert.ok(step1.sreNote.includes('-A') || step1.sreNote.includes('ssh -A'), 'Krok 1 w notatce SRE musi wyjaśniać użycie flagi -A do przekazywania agenta SSH');
 
 // Komenda rc-status
 assert.ok(step1.commands.some(c => c.cmd.includes('rc-status')), 'Krok 1 musi zawierać komendę rc-status do sprawdzenia procesów/usług');
-assert.ok(step1.adrianNote.includes('rc-status'), 'Krok 1 w notatce Adriana musi wyjaśniać użycie rc-status przed logowaniem');
+assert.ok(step1.sreNote.includes('rc-status'), 'Krok 1 w notatce SRE musi wyjaśniać użycie rc-status przed logowaniem');
 
 // Komendy zatrzymania procesu / odcięcia połączeń
 assert.ok(step1.commands.some(c => c.cmd.includes('/etc/init.d/postgresql-11 stop')), 'Krok 1 musi zawierać zatrzymanie PostgreSQL na Gentoo OpenRC');
@@ -161,7 +161,7 @@ console.log('✅ ZERO-CONNECTION & SERVICE CONTROL: rc-status, stop, start, term
 // === TEST 4: Trik z tabelą wersja i Wine kgp.exe ===
 console.log('\n=== TEST 4: Trik z Tabelą wersja oraz Podpisywanie Wine kgp.exe ===');
 const step2 = steps.find(s => s.id === 'step_2');
-assert.ok(step2.adrianNote.includes('INSERT INTO wersja'), 'Krok 2 musi wyjaśniać wycięcie pierwszej linijki INSERT INTO wersja');
+assert.ok(step2.sreNote.includes('INSERT INTO wersja'), 'Krok 2 musi wyjaśniać wycięcie pierwszej linijki INSERT INTO wersja');
 assert.ok(step2.commands.some(c => c.cmd.includes('/home/lab/marcel/service/')), 'Krok 2 musi używać ścieżki /home/lab/marcel/service/');
 
 const step4 = steps.find(s => s.id === 'step_4');
@@ -169,7 +169,7 @@ const wineCmd = step4.commands.find(c => c.cmd.includes('wine kgp.exe -a centrum
 assert.ok(wineCmd, 'Krok 4 musi zawierać komendę: wine kgp.exe -a centrum.exe');
 assert.ok(step4.commands.some(c => c.cmd.includes('chown lab:users')), 'Krok 4 musi zawierać nadanie uprawnień chown lab:users');
 assert.ok(step4.commands.some(c => c.cmd.includes('chmod 755')), 'Krok 4 musi zawierać nadanie uprawnień chmod 755');
-assert.ok(step4.adrianNote.includes('PE') || step4.adrianNote.includes('bit'), 'Krok 4 musi wyjaśniać modyfikację bitu PE licencji');
+assert.ok(step4.sreNote.includes('PE') || step4.sreNote.includes('bit'), 'Krok 4 musi wyjaśniać modyfikację bitu PE licencji');
 console.log('✅ WERSJA TRICK & WINE SIGNING: Procedura zawiera kluczowe tribal knowledge');
 
 // === TEST 5: Serwery satelitarne Alab (RDP Debian & CZA marcele.pl) ===
@@ -177,7 +177,7 @@ console.log('\n=== TEST 5: Weryfikacja Obsługi Serwerów Satelitarnych Alab ===
 const step5 = steps.find(s => s.id === 'step_5');
 assert.ok(step5.title.includes('RDP') && step5.title.includes('CZA'), 'Krok 5 musi dotyczyć serwerów RDP i CZA');
 assert.ok(step5.commands.some(c => c.cmd.includes('marcele.pl')), 'Krok 5 musi zawierać serwer marcele.pl dla telepatologii CZA');
-assert.ok(step5.adrianNote.includes('Gentoo') && step5.adrianNote.includes('Debian'), 'Krok 5 musi opisywać transfer między Debianem bez Wine a Gentoo z Wine');
+assert.ok(step5.sreNote.includes('Gentoo') && step5.sreNote.includes('Debian'), 'Krok 5 musi opisywać transfer między Debianem bez Wine a Gentoo z Wine');
 console.log('✅ ALAB SATELLITES: Workflow przenoszenia i podpisywania klucza na Gentoo zaimplementowany');
 
 // === TEST 6: Baza Komend Ściągawki Terminalowej ===
@@ -223,7 +223,7 @@ const container = document.getElementById('pg-update-sop-container');
 window.renderPgUpdateSopModule();
 assert.ok(container.innerHTML.length > 500, 'Kontener modułu musi zostać wypełniony zawartością HTML');
 assert.ok(container.innerHTML.includes('Standard Operating Procedure'), 'HTML musi zawierać nagłówek procedury');
-assert.ok(container.innerHTML.includes('Adrian Wojtkowski'), 'HTML musi wskazywać autora procedury');
+assert.ok(container.innerHTML.includes('Główny Zespół SRE LIS') || container.innerHTML.includes('Zespół SRE'), 'HTML musi wskazywać autora procedury');
 
 const contentEl = document.getElementById('sop-subtab-content');
 assert.ok(contentEl.innerHTML.includes('Zaktualizowana Procedura Standardowa (SOP): Aktualizacja Bazy PostgreSQL i Centrum'), 'Podzakładka musi zawierać zaktualizowany nagłówek SOP');

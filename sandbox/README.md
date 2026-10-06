@@ -1,6 +1,6 @@
 # 🧪 HealthTech SRE Sandbox: Poligon Testowy Aktualizacji PostgreSQL & Centrum
 
-Gotowe środowisko testowe do samodzielnego przećwiczenia procedury aktualizacji bazy PostgreSQL i oprogramowania Centrum (LIS Marcel) zgodnie z wytycznymi Adriana Wojtkowskiego.
+Gotowe środowisko testowe do samodzielnego przećwiczenia procedury aktualizacji bazy PostgreSQL i oprogramowania Centrum (LIS Marcel) zgodnie z wytycznymi inżynierów SRE.
 
 ---
 
@@ -37,7 +37,7 @@ Otwórz drugie okno terminala i zasymuluj wiszące zapytanie pracownika:
 ```bash
 docker exec -it marcel-db-sandbox psql -U lab -d centrum -c "SELECT pg_sleep(120);"
 ```
-Wróć do pierwszego okna i wykonaj zapytanie Adriana:
+Wróć do pierwszego okna i wykonaj zapytanie weryfikacyjne SRE:
 ```bash
 psql -U postgres -d centrum -c "SELECT * FROM pg_stat_activity WHERE datname = 'centrum';"
 ```
@@ -65,7 +65,7 @@ chmod +x update.sh kgp.exe
    # Otrzymasz: ERROR: duplicate key value violates unique constraint "wersja_pkey"
    ```
 
-2. **Zastosowanie triku Adriana Wojtkowskiego:**
+2. **Zastosowanie triku inżynierskiego SRE:**
    Wycinamy pierwszą linijkę `INSERT INTO wersja`:
    ```bash
    sed -i '1{/INSERT INTO wersja/d}' 5.2.1.sql

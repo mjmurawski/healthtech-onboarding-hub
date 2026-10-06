@@ -2,7 +2,7 @@
  * PostgreSQL & Centrum Update SOP Module (pg-update-sop.js)
  * 
  * Standardowa Procedura Operacyjna (SOP) aktualizacji bazy danych PostgreSQL
- * oraz oprogramowania Centrum (LIS Marcel) autorstwa Adriana Wojtkowskiego.
+ * oraz oprogramowania Centrum (LIS Marcel) – wytyczne inżynierów SRE.
  * 
  * Moduł produkcyjny:
  * 1. Procedura krok po kroku z interaktywną checklistą (localStorage)
@@ -98,7 +98,7 @@
   }
 
   /**
-   * Baza Wiedzy SOP: Procedura Krok po Kroku (Wiedza Adriana Wojtkowskiego)
+   * Baza Wiedzy SOP: Procedura Krok po Kroku (Wytyczne i Standardy SRE)
    */
   const SOP_STEPS = [
     {
@@ -112,7 +112,7 @@
       summary: 'Połączenie z serwerem przez ssh -A (SSH Agent Forwarding), przejście do /home/lab/Marcel/, weryfikacja usług przez rc-status, sprawdzenie czy żaden klient nie korzysta z bazy centrum oraz kontrola usługi PostgreSQL (OpenRC na Gentoo lub systemd na Debian/Ubuntu).',
       descriptionHtml: 'Aktualizacja schematu bazy (skrypty SQL z <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">ALTER TABLE</span> , dropowaniem widoków itp.) wymaga wyłącznego dostępu do tabel ( <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">zlecenia</span> , <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">wykonania</span> , <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">wyniki</span> ). Jakiekolwiek aktywne połączenie spowoduje <strong style="color: #ffffff;">deadlock</strong> i zawieszenie aktualizacji na wiele godzin.',
       why: 'Modyfikacja schematu (DDL, ALTER TABLE, triggery) wymaga wyłącznych blokad (ACCESS EXCLUSIVE). Jakiekolwiek wiszące połączenie zablokuje migrację w nieskończoność lub spowoduje błąd deadlock.',
-      adrianNote: 'Adrian Wojtkowski podkreśla: do serwera klienta zawsze logujemy się z flagą -A (ssh -A root@<IP_SERWERA>), która włącza SSH Agent Forwarding. Dzięki temu lokalny agent kluczy jest przekazywany na serwer i pozwala później (w Kroku 5) na bezpośredni transfer scp / sesje ssh do satelitów Alab (Debian RDP, cza.marcele.pl) bez konieczności wgrywania klucza prywatnego na serwer bazy danych! Po zalogowaniu przechodzimy do /home/lab/Marcel/, wykonujemy ls -l (lub uruchamiamy mc), sprawdzamy stan usług przez rc-status, a w konsoli psql odpalamy SELECT * FROM pg_stat_activity WHERE datname = \'centrum\';. Chodzi o natychmiastowy rzut oka na wynik: ma być dokładnie „(0 rows)”. Jeśli wiszą sesje aplikacji, zatrzymujemy usługę (/etc/init.d/postgresql-11 stop) lub zrzucamy sesje i uruchamiamy ponownie.',
+      sreNote: 'Wskazówka zespołu SRE: do serwera klienta zawsze logujemy się z flagą -A (ssh -A root@<IP_SERWERA>), która włącza SSH Agent Forwarding. Dzięki temu lokalny agent kluczy jest przekazywany na serwer i pozwala później (w Kroku 5) na bezpośredni transfer scp / sesje ssh do satelitów Alab (Debian RDP, cza.marcele.pl) bez konieczności wgrywania klucza prywatnego na serwer bazy danych! Po zalogowaniu przechodzimy do /home/lab/Marcel/, wykonujemy ls -l (lub uruchamiamy mc), sprawdzamy stan usług przez rc-status, a w konsoli psql odpalamy SELECT * FROM pg_stat_activity WHERE datname = \'centrum\';. Chodzi o natychmiastowy rzut oka na wynik: ma być dokładnie „(0 rows)”. Jeśli wiszą sesje aplikacji, zatrzymujemy usługę (/etc/init.d/postgresql-11 stop) lub zrzucamy sesje i uruchamiamy ponownie.',
       substeps: [
         {
           label: '1. Połączenie SSH z serwerem z przekazywaniem agenta kluczy (SSH Agent Forwarding):',
@@ -135,7 +135,7 @@
           lang: 'bash'
         },
         {
-          label: '5. Sprawdź aktywne połączenia (dokładnie tak jak robi to Adrian):',
+          label: '5. Sprawdź aktywne połączenia (dokładnie tak jak w standardowej procedurze):',
           cmd: "SELECT * FROM pg_stat_activity WHERE datname = 'centrum';",
           lang: 'sql'
         },
@@ -286,7 +286,7 @@
       summary: 'Utworzenie katalogu wersji w /home/lab/marcel/service/, rozpakowanie paczki aktualizacji oraz kluczowa modyfikacja pierwszego pliku SQL.',
       descriptionHtml: 'Aktualizacje LIS Marcel często przeskakują o kilka wydań (np. z <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">5.2.0</span> do <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">5.3.2</span>). W pierwszym pliku SQL znajduje się wpis podbijający numer wersji, który może wywołać konflikt klucza unikalnego i zatrzymać skrypt instalacyjny.',
       why: 'Aktualizacje LIS Marcel często przeskakują o kilka wydań (np. z 5.2.0 do 5.3.2). W pierwszym pliku SQL znajduje się wpis podbijający numer wersji, który może wywołać konflikt klucza unikalnego i zatrzymać skrypt instalacyjny.',
-      adrianNote: 'Trik Adriana Wojtkowskiego: „W pierwszym pliku SQL (np. 5.2.1.sql) wycinamy pierwszą linijkę INSERT INTO wersja..., żeby nie wywaliło błędu unikalności lub kolizji, a pozostałe instrukcje DDL (ALTER TABLE, procedury, triggery) się wykonały. Kolejne pliki (5.2.2.sql aż do 5.3.2.sql) bez problemu zaktualizują wersję do wartości docelowej”.',
+      sreNote: 'Sprawdzony trik inżynierski SRE: „W pierwszym pliku SQL (np. 5.2.1.sql) wycinamy pierwszą linijkę INSERT INTO wersja..., żeby nie wywaliło błędu unikalności lub kolizji, a pozostałe instrukcje DDL (ALTER TABLE, procedury, triggery) się wykonały. Kolejne pliki (5.2.2.sql aż do 5.3.2.sql) bez problemu zaktualizują wersję do wartości docelowej”.',
       substeps: [
         {
           label: '1. Przejście do katalogu serwisowego i utworzenie podkatalogu wersji:',
@@ -299,7 +299,7 @@
           lang: 'bash'
         },
         {
-          label: '3. Edycja pierwszego pliku SQL i usunięcie pierwszej linijki INSERT INTO wersja (Trik Adriana):',
+          label: '3. Edycja pierwszego pliku SQL i usunięcie pierwszej linijki INSERT INTO wersja (Trik SRE z tabelą wersja):',
           cmd: "sed -i '1{/INSERT INTO wersja/d}' /home/lab/marcel/service/532_przed_zmianami/5.2.1.sql",
           lang: 'bash'
         },
@@ -356,7 +356,7 @@
       summary: 'Uruchomienie skryptu update.sh, który sekwencyjnie wykonuje wszystkie pliki SQL na bazie centrum i rejestruje logi.',
       descriptionHtml: 'Skrypt <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">update.sh</span> aplikuje zmiany w strukturze tabel, nowe indeksy, funkcje PL/pgSQL oraz konwersje danych medycznych w bazie danych <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">centrum</span>.',
       why: 'Skrypt update.sh aplikuje zmiany w strukturze tabel, nowe indeksy, funkcje PL/pgSQL oraz konwersje danych medycznych.',
-      adrianNote: 'Zawsze obserwuj wyjście terminala podczas działania update.sh. Jeśli skrypt zatrzyma się z błędem, sprawdź numer linii w pliku SQL. Dzięki wcześniejszemu wycięciu kolizyjnego INSERT-a do tabeli wersja skrypt przechodzi gładko.',
+      sreNote: 'Zawsze obserwuj wyjście terminala podczas działania update.sh. Jeśli skrypt zatrzyma się z błędem, sprawdź numer linii w pliku SQL. Dzięki wcześniejszemu wycięciu kolizyjnego INSERT-a do tabeli wersja skrypt przechodzi gładko.',
       substeps: [
         {
           label: '1. Nadanie uprawnień do wykonania i start skryptu aktualizacji:',
@@ -415,7 +415,7 @@
       summary: 'Podmiana pliku centrum.exe, nadanie uprawnień lab:users (755) oraz aktywacja binarnego bitu licencji za pomocą Wine i kgp.exe.',
       descriptionHtml: 'Plik <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">centrum.exe</span> jest binarką Windows uruchamianą na serwerze i udostępnianą stacjom roboczym. Bez aktywacji bitu licencyjnego przez <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">kgp.exe -a</span> aplikacja blokuje użytkowników (tzw. ekran „czerwonej czaszki” / brak licencji).',
       why: 'Plik centrum.exe jest binarką Windows uruchamianą na serwerze i udostępnianą stacjom. Bez aktywacji bitu licencyjnego przez kgp.exe -a aplikacja blokuje użytkowników (tzw. ekran „czerwonej czaszki” / brak licencji).',
-      adrianNote: 'Adrian Wojtkowski tłumaczy: „Program kgp.exe z flagą -a centrum.exe modyfikuje specyficzny bit w nagłówku/kodzie binarki PE pliku wykonywalnego oraz aktualizuje skojarzony plik .key. Bez uruchomienia tego przez Wine, centrum.exe nie odpali się u klientów i zgłosi błąd braku autoryzacji licencji”.',
+      sreNote: 'Wyjaśnienie inżyniera systemowego: „Program kgp.exe z flagą -a centrum.exe modyfikuje specyficzny bit w nagłówku/kodzie binarki PE pliku wykonywalnego oraz aktualizuje skojarzony plik .key. Bez uruchomienia tego przez Wine, centrum.exe nie odpali się u klientów i zgłosi błąd braku autoryzacji licencji”.',
       substeps: [
         {
           label: '1. Skopiowanie nowego centrum.exe do katalogu produkcyjnego:',
@@ -433,7 +433,7 @@
           lang: 'bash'
         },
         {
-          label: '4. Podpisanie licencji i aktywacja bitu PE za pomocą Wine (Kluczowy krok Adriana!):',
+          label: '4. Podpisanie licencji i aktywacja bitu PE za pomocą Wine (Kluczowy krok procedury):',
           cmd: 'cd /home/lab/marcel/\nwine kgp.exe -a centrum.exe',
           lang: 'bash'
         },
@@ -467,7 +467,7 @@
           lang: 'bash'
         },
         {
-          label: 'Podpisanie licencji i aktywacja bitu PE za pomocą Wine (Kluczowy krok Adriana!)',
+          label: 'Podpisanie licencji i aktywacja bitu PE za pomocą Wine (Kluczowy krok procedury)',
           cmd: 'cd /home/lab/marcel/\nwine kgp.exe -a centrum.exe',
           lang: 'bash'
         },
@@ -496,7 +496,7 @@
       summary: 'Procedura dla serwerów terminalowych RDP (Debian) oraz serwerów CZA (marcele.pl dla mikroskopistów zdalnych), które nie posiadają zainstalowanego Wine.',
       descriptionHtml: 'Serwery terminalowe Alab pracują na czystym Debianie bez zainstalowanego Wine. Nie można na nich bezpośrednio uruchomić <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">kgp.exe -a</span>, dlatego klucz przenosi się na maszynę Gentoo.',
       why: 'Serwery terminalowe Alab pracują na czystym Debianie bez zainstalowanego Wine. Nie można na nich bezpośrednio uruchomić kgp.exe -a.',
-      adrianNote: 'Workflow Adriana dla Alab: 1. Pobieramy plik klucza .key z serwera Debian na główny serwer bazodanowy Gentoo (gdzie jest Wine). 2. Na serwerze Gentoo odpalamy wine kgp.exe -a centrum.exe z pobranym kluczem. 3. Odsyłamy podpisany centrum.exe oraz zaktualizowany .key z powrotem na serwer RDP/CZA. 4. Nadajemy chown lab:users i chmod 755.',
+      sreNote: 'Procedura SRE dla Alab: 1. Pobieramy plik klucza .key z serwera Debian na główny serwer bazodanowy Gentoo (gdzie jest Wine). 2. Na serwerze Gentoo odpalamy wine kgp.exe -a centrum.exe z pobranym kluczem. 3. Odsyłamy podpisany centrum.exe oraz zaktualizowany .key z powrotem na serwer RDP/CZA. 4. Nadajemy chown lab:users i chmod 755.',
       substeps: [
         {
           label: '1. Pobranie pliku .key z serwera RDP (Debian) na serwer Gentoo (z Wine):',
@@ -566,7 +566,7 @@
       summary: 'Usunięcie skryptów instalacyjnych i kgp.exe z katalogu produkcyjnego klienta, wznowienie usług peryferyjnych oraz wpis audytowy w zgłoszeniu Jira.',
       descriptionHtml: 'Pozostawienie narzędzia <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">kgp.exe</span> (key generator) oraz skryptów <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">update.sh</span> w katalogu produkcyjnym stwarza ryzyko naruszenia bezpieczeństwa oraz przypadkowego ponownego uruchomienia.',
       why: 'Pozostawienie narzędzia kgp.exe (key generator) oraz skryptów update.sh w katalogu produkcyjnym stwarza ryzyko naruszenia bezpieczeństwa oraz przypadkowego ponownego uruchomienia.',
-      adrianNote: 'Adrian Wojtkowski zaznacza: po zakończeniu zawsze usuwamy ze środowiska klienta plik kgp.exe oraz update.sh. Klient nie powinien mieć dostępu do generatora licencji. Następnie uruchamiamy klienta z jednego stanowiska testowego i dokumentujemy wersję w tickecie.',
+      sreNote: 'Zasada bezpieczeństwa SRE: po zakończeniu zawsze usuwamy ze środowiska klienta plik kgp.exe oraz update.sh. Klient nie powinien mieć dostępu do generatora licencji. Następnie uruchamiamy klienta z jednego stanowiska testowego i dokumentujemy wersję w tickecie.',
       substeps: [
         {
           label: '1. Usunięcie skryptów instalacyjnych i kgp.exe z katalogu roboczego klienta:',
@@ -645,7 +645,7 @@
       title: 'Uruchomienie menedżera plików Midnight Commander (mc)',
       cmd: 'mc',
       shell: 'bash (root na serwerze)',
-      explanation: 'Dwuokienkowy konsolowy menedżer plików używany przez Adriana Wojtkowskiego na nagraniu do szybkiej nawigacji po katalogach, edycji skryptów i kopiowania binarek.'
+      explanation: 'Dwuokienkowy konsolowy menedżer plików używany w sesjach terminalowych do szybkiej nawigacji po katalogach, edycji skryptów i kopiowania binarek.'
     },
     {
       id: 'cmd_gentoo_rc_status',
@@ -653,7 +653,7 @@
       title: 'Weryfikacja uruchomionych procesów i usług (OpenRC Gentoo)',
       cmd: 'rc-status',
       shell: 'bash (root)',
-      explanation: 'Podstawowe sprawdzenie usług systemowych przed zalogowaniem do bazy danych (wskazówka Adriana Wojtkowskiego).'
+      explanation: 'Podstawowe sprawdzenie usług systemowych przed zalogowaniem do bazy danych (rekomendacja inżyniera SRE).'
     },
     {
       id: 'cmd_psql_check',
@@ -661,7 +661,7 @@
       title: 'Weryfikacja braku aktywnych sesji bazy centrum (Musi dać: (0 rows))',
       cmd: "SELECT * FROM pg_stat_activity WHERE datname = 'centrum';",
       shell: 'psql -U postgres',
-      explanation: 'Dokładna komenda używana przez Adriana Wojtkowskiego. Szybki rzut oka na terminal: (0 rows) oznacza pełne bezpieczeństwo migracji DDL.'
+      explanation: 'Dokładna komenda używana w procedurze weryfikacji. Szybki rzut oka na terminal: (0 rows) oznacza pełne bezpieczeństwo migracji DDL.'
     },
     {
       id: 'cmd_psql_inline',
@@ -813,7 +813,7 @@
       title: 'Pełny zrzut logiczny (pg_dump format custom) przed przebudową bazy',
       cmd: 'pg_dump -U postgres -Fc -d centrum -f /backup/centrum_$(date +%F_%H%M).dump',
       shell: 'bash',
-      explanation: 'Metoda Adriana na drastyczną redukcję dead tuples po archiwizacji: czysty eksport danych logicznych.'
+      explanation: 'Sprawdzona metoda SRE na drastyczną redukcję dead tuples po archiwizacji: czysty eksport danych logicznych.'
     },
     {
       id: 'cmd_pg_restore_shrink',
@@ -901,7 +901,7 @@
               <div>
                 <h3 style="margin: 0; font-size: 1.25rem;">Standard Operating Procedure (SOP) • PostgreSQL &amp; Centrum</h3>
                 <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 2px;">
-                  Baza wiedzy i instrukcja produkcyjna: <strong>Adrian Wojtkowski</strong> | Cel: <strong>LIS Marcel / PostgreSQL 11+ (Gentoo &amp; Debian)</strong>
+                  Baza wiedzy i instrukcja produkcyjna: <strong>Główny Zespół SRE LIS</strong> | Cel: <strong>LIS Marcel / PostgreSQL 11+ (Gentoo &amp; Debian)</strong>
                 </div>
               </div>
             </div>
@@ -1172,10 +1172,10 @@
             ${renderStepSubsteps(step)}
           </div>
 
-          <!-- Wiedza Adriana & Dlaczego to robimy -->
+          <!-- Wiedza i Wytyczne SRE & Dlaczego to robimy -->
           <div style="margin: 20px 0; background: rgba(227, 179, 65, 0.06); border-left: 3px solid #e3b341; padding: 12px 16px; border-radius: 0 6px 6px 0; font-size: 0.88rem; color: #c9d1d9; line-height: 1.5;">
-            <strong style="color: #e3b341; display: block; margin-bottom: 4px;">💡 Wiedza Adriana Wojtkowskiego:</strong>
-            ${escapeHtml(step.adrianNote)}
+            <strong style="color: #e3b341; display: block; margin-bottom: 4px;">💡 Wiedza i Wytyczne SRE:</strong>
+            ${escapeHtml(step.sreNote)}
           </div>
 
           <!-- Quality Gates Checklist -->
@@ -1199,7 +1199,7 @@
             <span>📋</span> Zaktualizowana Procedura Standardowa (SOP): Aktualizacja Bazy PostgreSQL i Centrum
           </h2>
           <div style="font-size: 0.88rem; color: #8b949e; line-height: 1.5;">
-            Oficjalny proces aktualizacji schematu bazy danych i aplikacji klienckiej w środowiskach laboratoryjnych i szpitalnych (autor: <strong>Adrian Wojtkowski</strong>). Każdy krok posiada czytelny schemat komend, ocenę wyników oraz bramki jakościowe (Quality Gates).
+            Oficjalny proces aktualizacji schematu bazy danych i aplikacji klienckiej w środowiskach laboratoryjnych i szpitalnych (opracowanie: <strong>Główny Zespół SRE LIS</strong>). Każdy krok posiada czytelny schemat komend, ocenę wyników oraz bramki jakościowe (Quality Gates).
           </div>
           <hr style="border: none; border-top: 1px solid #21262d; margin: 16px 0 28px 0;">
         </div>
@@ -1329,7 +1329,7 @@
       <div class="card" style="padding: 16px 20px; margin-bottom: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
           <div>
-            <h4 style="margin: 0;">⚡ Podręczna Ściągawka Terminalowa (Adrian Wojtkowski Edition)</h4>
+            <h4 style="margin: 0;">⚡ Podręczna Ściągawka Terminalowa (SRE Production Edition)</h4>
             <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 2px;">
               Błyskawiczne kopiowanie przetestowanych poleceń Bash, psql i OpenRC.
             </div>
@@ -1390,7 +1390,7 @@
             <div>
               <h3 style="margin: 0;">Problem PostgreSQL Bloat &amp; Strategia Zmniejszania Bazy</h3>
               <div style="font-size: 0.82rem; color: var(--text-secondary);">
-                Jak Adrian Wojtkowski zmniejszył bazę szpitalną z 1.3 TB do 300 GB po usunięciu starych danych
+                Jak inżynierowie SRE zmniejszyli bazę szpitalną z 1.3 TB do 300 GB po usunięciu starych danych
               </div>
             </div>
           </div>
@@ -1417,7 +1417,7 @@
             </div>
 
             <div style="background: var(--bg-input); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-              <h5 style="color: #06d6a0; margin-top: 0;">🏆 Rozwiązanie Adriana: pg_dump &amp; pg_restore</h5>
+              <h5 style="color: #06d6a0; margin-top: 0;">🏆 Rozwiązanie SRE: pg_dump &amp; pg_restore</h5>
               <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0;">
                 W sytuacji dużej bazy po archiwizacji (np. usunięcie zleceń sprzed 5 lat) najlepszą, bezpieczną procedurą jest wykonanie logicznego zrzutu <code>pg_dump -Fc</code> i odtworzenie go do nowej bazy. Odtworzone tabele i indeksy B-Tree są w 100% zoptymalizowane i pozbawione bloatu.
               </p>
@@ -1699,11 +1699,11 @@ sudo -u postgres psql -c "CREATE DATABASE centrum OWNER lab;"</code></pre>
             <!-- Ćwiczenie 1 -->
             <div style="background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 16px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <strong style="color: var(--accent-cyan); font-size: 0.9rem;">Ćwiczenie 1: Symulacja wiszącej transakcji &amp; Test zapytania Adriana (0 rows)</strong>
+                <strong style="color: var(--accent-cyan); font-size: 0.9rem;">Ćwiczenie 1: Symulacja wiszącej transakcji &amp; Test zapytania kontrolnego SRE (0 rows)</strong>
                 <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('ex-1-cmd')" style="font-size: 0.75rem; padding: 2px 8px;">📋 Kopiuj Komendy</button>
               </div>
               <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0 0 8px 0;">
-                W oknie 1 uruchamiasz wiszącą transakcję (np. laborant zostawił otwarty program). W oknie 2 sprawdzasz czy zapytanie Adriana wykryje brak zerowych połączeń:
+                W oknie 1 uruchamiasz wiszącą transakcję (np. laborant zostawił otwarty program). W oknie 2 sprawdzasz czy zapytanie kontrolne SRE wykryje brak zerowych połączeń:
               </p>
               <pre style="margin: 0; background: transparent; padding: 0;"><code id="ex-1-cmd" style="font-family: var(--font-mono); font-size: 0.83rem; color: #a5d6ff;"># W oknie A (symulacja zawieszonej sesji laboranta):
 psql -U lab -d centrum -c "SELECT pg_sleep(120);"
@@ -1716,18 +1716,18 @@ psql -U postgres -d centrum -c "SELECT * FROM pg_stat_activity WHERE datname = '
             <!-- Ćwiczenie 2 -->
             <div style="background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 16px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <strong style="color: var(--accent-amber); font-size: 0.9rem;">Ćwiczenie 2: Trik Adriana z wycięciem INSERT INTO wersja w 5.2.1.sql</strong>
+                <strong style="color: var(--accent-amber); font-size: 0.9rem;">Ćwiczenie 2: Trik SRE z tabelą wersja i wycięciem INSERT INTO wersja w 5.2.1.sql</strong>
                 <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('ex-2-cmd')" style="font-size: 0.75rem; padding: 2px 8px;">📋 Kopiuj Komendy</button>
               </div>
               <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0 0 8px 0;">
-                Sprawdź dlaczego skrypt wywala błąd bez triku Adriana i jak jedna komenda <code>sed</code> rozwiązuje problem:
+                Sprawdź dlaczego skrypt wywala błąd bez triku inżynierskiego SRE i jak jedna komenda <code>sed</code> rozwiązuje problem:
               </p>
               <pre style="margin: 0; background: transparent; padding: 0;"><code id="ex-2-cmd" style="font-family: var(--font-mono); font-size: 0.83rem; color: #a5d6ff;">cd /home/lab/marcel/service/532_przed_zmianami/
 
 # 1. Sprawdź zawartość pierwszego pliku SQL:
 head -n 2 5.2.1.sql
 
-# 2. Wycięcie kolizyjnej pierwszej linijki INSERT INTO wersja (Trik Adriana):
+# 2. Wycięcie kolizyjnej pierwszej linijki INSERT INTO wersja (Trik SRE z tabelą wersja):
 sed -i '1{/INSERT INTO wersja/d}' 5.2.1.sql
 
 # 3. Uruchomienie aktualizacji:
@@ -1800,14 +1800,14 @@ scp centrum.exe centrum.key lab@satellite-rdp:/home/lab/marcel/</code></pre>
       system: 'PostgreSQL / Centrum LIS',
       category: 'Procedura Produkcyjna',
       createdAt: new Date().toISOString(),
-      author: 'Adrian Wojtkowski / Zespół SRE',
+      author: 'Główny Inżynier / Zespół SRE',
       severity: 'Planned Maintenance',
       summary: 'Oficjalna procedura aktualizacji bazy PostgreSQL i oprogramowania Centrum z obsługą zero-connection check, OpenRC, triku tabeli wersja, binarki Wine kgp.exe oraz serwerów satelitarnych RDP i CZA.',
       steps: SOP_STEPS.map(s => ({
         stepNumber: s.number,
         title: s.title,
         keyCommand: s.commands[0]?.cmd || '',
-        adrianNote: s.adrianNote
+        sreNote: s.sreNote
       })),
       verified: true
     };
