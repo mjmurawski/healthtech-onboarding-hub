@@ -1,0 +1,1201 @@
+/**
+ * PostgreSQL & Centrum Update SOP Module (pg-update-sop.js)
+ * 
+ * Standardowa Procedura Operacyjna (SOP) aktualizacji bazy danych PostgreSQL
+ * oraz oprogramowania Centrum (LIS Marcel) autorstwa Adriana Wojtkowskiego.
+ * 
+ * Moduł produkcyjny:
+ * 1. Procedura krok po kroku z interaktywną checklistą (localStorage)
+ * 2. Ściągawka terminalowa z 1-Click kopiowaniem i wyszukiwarką na żywo
+ * 3. Analiza Bloat w PostgreSQL & technika drastycznej redukcji dysku (1.3 TB -> 300 GB)
+ * 4. Peryferia szpitalne (TigerVNC, Samba, Cron, Mirth, kontenery LXC)
+ * 5. Obsługa serwerów satelitarnych Alab (Debian RDP & CZA bez Wine vs Gentoo z Wine)
+ * 6. Integracja z Bazą Runbooków Hubu (appState.saveIncidentRunbook)
+ */
+
+(function () {
+  'use strict';
+
+  // Bezpieczne pomocniki
+  const escapeHtml = function (str) {
+    if (typeof window !== 'undefined' && typeof window.escapeHtml === 'function') {
+      return window.escapeHtml(str);
+    }
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
+  const showToast = function (msg, type = 'info') {
+    if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+      window.showToast(msg, type);
+    } else {
+      console.log(`[Toast ${type}] ${msg}`);
+    }
+  };
+
+  // Stan lokalny modułu
+  const sopState = {
+    activeSubTab: 'procedure', // 'procedure' | 'cheatsheet' | 'bloat' | 'peripherals'
+    searchQuery: '',
+    completedSteps: {}
+  };
+
+  // Klucz pamięci checklisty w localStorage
+  const CHECKLIST_STORAGE_KEY = 'healthtech_pg_update_sop_checklist';
+
+  function loadChecklistState() {
+    try {
+      const saved = localStorage.getItem(CHECKLIST_STORAGE_KEY);
+      if (saved) {
+        sopState.completedSteps = JSON.parse(saved);
+      }
+    } catch (e) {
+      sopState.completedSteps = {};
+    }
+  }
+
+  function saveChecklistState() {
+    try {
+      localStorage.setItem(CHECKLIST_STORAGE_KEY, JSON.stringify(sopState.completedSteps));
+    } catch (e) {
+      console.warn('Nie udało się zapisać stanu checklisty SOP:', e);
+    }
+  }
+
+  /**
+   * Baza Wiedzy SOP: Procedura Krok po Kroku (Wiedza Adriana Wojtkowskiego)
+   */
+  const SOP_STEPS = [
+    {
+      id: 'step_1',
+      number: '1',
+      title: 'Weryfikacja zerowej liczby połączeń & Restart usługi PostgreSQL',
+      badge: 'Zero-Connection Policy',
+      badgeColor: '#ef476f',
+      estimatedTime: '3-5 min',
+      summary: 'Sprawdzenie czy żaden klient nie korzysta z bazy centrum oraz restart daemona PostgreSQL (OpenRC na Gentoo lub systemd na Debian/Ubuntu).',
+      why: 'Modyfikacja schematu (DDL, ALTER TABLE, triggery) wymaga wyłącznych blokad (ACCESS EXCLUSIVE). Jakiekolwiek wiszące połączenie zablokuje migrację w nieskończoność lub spowoduje błąd deadlock.',
+      adrianNote: 'Adrian Wojtkowski podkreśla: w konsoli psql uruchamiamy po prostu SELECT * FROM pg_stat_activity WHERE datname = \'centrum\';. Nie potrzebujemy wypisywać wielu kolumn (pid, usename, state...), ponieważ w terminalu chodzi o natychmiastowy rzut oka na wynik: ma być dokładnie „(0 rows)”. Procesy systemowe (walwriter, checkpointer) nie mają datname = \'centrum\', więc nie blokują DDL.',
+      commands: [
+        {
+          label: 'Wejście do konsoli PostgreSQL jako superuser',
+          cmd: 'psql -U postgres'
+        },
+        {
+          label: 'Weryfikacja zerowej liczby aktywnych połączeń (Musi zwrócić: (0 rows))',
+          cmd: "SELECT * FROM pg_stat_activity WHERE datname = 'centrum';"
+        },
+        {
+          label: 'Restart usługi PostgreSQL — Gentoo Linux (OpenRC)',
+          cmd: '/etc/init.d/postgresql-11 restart'
+        },
+        {
+          label: 'Restart usługi PostgreSQL — Debian / Ubuntu (systemd)',
+          cmd: 'systemctl restart postgresql'
+        },
+        {
+          label: 'Ponowna weryfikacja po restarcie (Musi zwrócić: (0 rows))',
+          cmd: "psql -U postgres -c \"SELECT * FROM pg_stat_activity WHERE datname = 'centrum';\""
+        }
+      ],
+      checklistItems: [
+        'Upewniono się, że personel laboratorium został uprzedzony o oknie serwisowym',
+        'Wykonano zapytanie do pg_stat_activity i potwierdzono wynik (0 rows)',
+        'Zrestartowano usługę bazy danych odpowiednią komendą dla danej dystrybucji (Gentoo/Debian)',
+        'Ponownie potwierdzono (0 rows) przed rozpoczęciem pracy na plikach'
+      ]
+    },
+    {
+      id: 'step_2',
+      number: '2',
+      title: 'Przygotowanie katalogu roboczego & Trik z tabelą „wersja”',
+      badge: 'SQL Schema Trick',
+      badgeColor: '#ffb703',
+      estimatedTime: '5-10 min',
+      summary: 'Utworzenie katalogu wersji w /home/lab/marcel/service/, rozpakowanie paczki aktualizacji oraz kluczowa modyfikacja pierwszego pliku SQL.',
+      why: 'Aktualizacje LIS Marcel często przeskakują o kilka wydań (np. z 5.2.0 do 5.3.2). W pierwszym pliku SQL znajduje się wpis podbijający numer wersji, który może wywołać konflikt klucza unikalnego i zatrzymać skrypt instalacyjny.',
+      adrianNote: 'Trik Adriana Wojtkowskiego: „W pierwszym pliku SQL (np. 5.2.1.sql) wycinamy pierwszą linijkę INSERT INTO wersja..., żeby nie wywaliło błędu unikalności lub kolizji, a pozostałe instrukcje DDL (ALTER TABLE, procedury, triggery) się wykonały. Kolejne pliki (5.2.2.sql aż do 5.3.2.sql) bez problemu zaktualizują wersję do wartości docelowej”.',
+      commands: [
+        {
+          label: 'Przejście do katalogu serwisowego i utworzenie podkatalogu wersji',
+          cmd: 'cd /home/lab/marcel/service/\nmkdir -p 532_przed_zmianami'
+        },
+        {
+          label: 'Rozpakowanie archiwum z nową wersją (skrypty SQL, update.sh, binarne exe)',
+          cmd: 'tar -xvf update_centrum_5.3.2.tar.gz -C /home/lab/marcel/service/532_przed_zmianami/'
+        },
+        {
+          label: 'Edycja pierwszego pliku SQL i usunięcie pierwszej linijki INSERT INTO wersja',
+          cmd: "sed -i '1{/INSERT INTO wersja/d}' /home/lab/marcel/service/532_przed_zmianami/5.2.1.sql"
+        },
+        {
+          label: 'Weryfikacja pierwszych linii pliku SQL po modyfikacji',
+          cmd: 'head -n 5 /home/lab/marcel/service/532_przed_zmianami/5.2.1.sql'
+        }
+      ],
+      checklistItems: [
+        'Katalog roboczy utworzony w /home/lab/marcel/service/',
+        'Paczka aktualizacyjna poprawnie rozpakowana i zweryfikowana pod kątem uprawnień',
+        'Zlokalizowano pierwszy plik SQL z łańcucha migracyjnego (np. 5.2.1.sql)',
+        'Wycięto pierwszą linijkę INSERT INTO wersja z pierwszego pliku SQL'
+      ]
+    },
+    {
+      id: 'step_3',
+      number: '3',
+      title: 'Wykonanie skryptu aktualizacyjnego (update.sh)',
+      badge: 'Database Migration',
+      badgeColor: '#3a86ff',
+      estimatedTime: '5-15 min',
+      summary: 'Uruchomienie skryptu update.sh, który sekwencyjnie wykonuje wszystkie pliki SQL na bazie centrum i rejestruje logi.',
+      why: 'Skrypt update.sh aplikuje zmiany w strukturze tabel, nowe indeksy, funkcje PL/pgSQL oraz konwersje danych medycznych.',
+      adrianNote: 'Zawsze obserwuj wyjście terminala podczas działania update.sh. Jeśli skrypt zatrzyma się z błędem, sprawdź numer linii w pliku SQL. Dzięki wcześniejszemu wycięciu kolizyjnego INSERT-a do tabeli wersja skrypt przechodzi gładko.',
+      commands: [
+        {
+          label: 'Nadanie uprawnień do wykonania i start skryptu aktualizacji',
+          cmd: 'cd /home/lab/marcel/service/532_przed_zmianami/\nchmod +x update.sh\n./update.sh'
+        },
+        {
+          label: 'Podgląd logów aktualizacji w czasie rzeczywistym (jeśli tworzony jest plik log)',
+          cmd: 'tail -f update.log'
+        },
+        {
+          label: 'Weryfikacja aktualnej wersji zarejestrowanej w bazie danych centrum',
+          cmd: "psql -U postgres -d centrum -c \"SELECT * FROM wersja ORDER BY data DESC LIMIT 5;\""
+        }
+      ],
+      checklistItems: [
+        'Skrypt update.sh uruchomiony z katalogu serwisowego',
+        'Brak błędów krytycznych (FATAL, ERROR: relation does not exist) w logu',
+        'Tabela wersja wskazuje docelowy numer wydania (np. 5.3.2)'
+      ]
+    },
+    {
+      id: 'step_4',
+      number: '4',
+      title: 'Wymiana centrum.exe, uprawnienia i podpisanie licencji (Wine / kgp.exe)',
+      badge: 'Binary & License Bit',
+      badgeColor: '#8338ec',
+      estimatedTime: '5 min',
+      summary: 'Podmiana pliku centrum.exe, nadanie uprawnień lab:users (755) oraz aktywacja binarnego bitu licencji za pomocą Wine i kgp.exe.',
+      why: 'Plik centrum.exe jest binarką Windows uruchamianą na serwerze i udostępnianą stacjom. Bez aktywacji bitu licencyjnego przez kgp.exe -a aplikacja blokuje użytkowników (tzw. ekran „czerwonej czaszki” / brak licencji).',
+      adrianNote: 'Adrian Wojtkowski tłumaczy: „Program kgp.exe z flagą -a centrum.exe modyfikuje specyficzny bit w nagłówku/kodzie binarki PE pliku wykonywalnego oraz aktualizuje skojarzony plik .key. Bez uruchomienia tego przez Wine, centrum.exe nie odpali się u klientów i zgłosi błąd braku autoryzacji licencji”.',
+      commands: [
+        {
+          label: 'Skopiowanie nowego centrum.exe do katalogu docelowego',
+          cmd: 'cp /home/lab/marcel/service/532_przed_zmianami/centrum.exe /home/lab/marcel/centrum.exe'
+        },
+        {
+          label: 'Ustawienie prawidłowego właściciela i grupy (lab:users)',
+          cmd: 'chown lab:users /home/lab/marcel/centrum.exe'
+        },
+        {
+          label: 'Nadanie uprawnień do uruchomienia (rwxr-xr-x)',
+          cmd: 'chmod 755 /home/lab/marcel/centrum.exe'
+        },
+        {
+          label: 'Podpisanie licencji i aktywacja bitu PE za pomocą Wine (Kluczowy krok Adriana!)',
+          cmd: 'cd /home/lab/marcel/\nwine kgp.exe -a centrum.exe'
+        },
+        {
+          label: 'Sprawdzenie daty modyfikacji i sumy kontrolnej centrum.exe oraz pliku .key',
+          cmd: 'ls -la /home/lab/marcel/centrum.exe /home/lab/marcel/*.key'
+        }
+      ],
+      checklistItems: [
+        'Nowy plik centrum.exe skopiowany do /home/lab/marcel/',
+        'Właściciel ustawiony na lab:users (lub lab:user zgodnie ze środowiskiem)',
+        'Prawa pliku ustawione na 755',
+        'Wykonano komendę wine kgp.exe -a centrum.exe bez błędów',
+        'Plik .key został zaktualizowany'
+      ]
+    },
+    {
+      id: 'step_5',
+      number: '5',
+      title: 'Obsługa serwerów satelitarnych Alab (RDP & serwer CZA marcele.pl)',
+      badge: 'Alab Satellite Topology',
+      badgeColor: '#00b4d8',
+      estimatedTime: '10-15 min',
+      summary: 'Procedura dla serwerów terminalowych RDP (Debian) oraz serwerów CZA (marcele.pl dla mikroskopistów zdalnych), które nie posiadają zainstalowanego Wine.',
+      why: 'Serwery terminalowe Alab pracują na czystym Debianie bez zainstalowanego Wine. Nie można na nich bezpośrednio uruchomić kgp.exe -a.',
+      adrianNote: 'Workflow Adriana dla Alab: 1. Pobieramy plik klucza .key z serwera Debian na główny serwer bazodanowy Gentoo (gdzie jest Wine). 2. Na serwerze Gentoo odpalamy wine kgp.exe -a centrum.exe z pobranym kluczem. 3. Odsyłamy podpisany centrum.exe oraz zaktualizowany .key z powrotem na serwer RDP/CZA. 4. Nadajemy chown lab:users i chmod 755.',
+      commands: [
+        {
+          label: 'Krok 5.1: Pobranie pliku .key z serwera RDP (Debian) na serwer Gentoo (z Wine)',
+          cmd: 'scp lab@rdp-server:/home/lab/marcel/*.key /home/lab/marcel/satellite_keys/'
+        },
+        {
+          label: 'Krok 5.2: Podpisanie binarki centrum.exe z kluczem satelity na serwerze Gentoo',
+          cmd: 'cd /home/lab/marcel/satellite_keys/\ncp /home/lab/marcel/service/532_przed_zmianami/centrum.exe .\nwine ../kgp.exe -a centrum.exe'
+        },
+        {
+          label: 'Krok 5.3: Odesłanie podpisanego centrum.exe i zaktualizowanego klucza na RDP / CZA',
+          cmd: 'scp centrum.exe *.key lab@rdp-server:/home/lab/marcel/\n# Dla serwera CZA (marcele.pl):\nscp centrum.exe *.key lab@cza.marcele.pl:/home/lab/marcel/'
+        },
+        {
+          label: 'Krok 5.4: Ustawienie uprawnień na serwerze docelowym RDP/CZA',
+          cmd: 'ssh lab@rdp-server "chown lab:users /home/lab/marcel/centrum.exe && chmod 755 /home/lab/marcel/centrum.exe"'
+        }
+      ],
+      checklistItems: [
+        'Zidentyfikowano czy dane wdrożenie posiada serwer RDP lub satelitę CZA (marcele.pl)',
+        'Plik klucza .key został bezpiecznie przetransferowany na maszynę z Wine',
+        'Podpisano binarkę centrum.exe dla środowiska satelitarnego',
+        'Pliki odesłane i zweryfikowano uprawnienia lab:users 755 na maszynie docelowej'
+      ]
+    },
+    {
+      id: 'step_6',
+      number: '6',
+      title: 'Czyszczenie powdrożeniowe, weryfikacja i dokumentacja Jira',
+      badge: 'Post-Deploy & Audit',
+      badgeColor: '#06d6a0',
+      estimatedTime: '5 min',
+      summary: 'Usunięcie skryptów instalacyjnych i kgp.exe z katalogu produkcyjnego klienta, wznowienie usług peryferyjnych oraz wpis audytowy w zgłoszeniu Jira.',
+      why: 'Pozostawienie narzędzia kgp.exe (key generator) oraz skryptów update.sh w katalogu produkcyjnym stwarza ryzyko naruszenia bezpieczeństwa oraz przypadkowego ponownego uruchomienia.',
+      adrianNote: 'Adrian Wojtkowski zaznacza: po zakończeniu zawsze usuwamy ze środowiska klienta plik kgp.exe oraz update.sh. Klient nie powinien mieć dostępu do generatora licencji. Następnie uruchamiamy klienta z jednego stanowiska testowego i dokumentujemy wersję w tickecie.',
+      commands: [
+        {
+          label: 'Usunięcie skryptów instalacyjnych i kgp.exe z katalogu roboczego klienta',
+          cmd: 'cd /home/lab/marcel/\nrm -f kgp.exe update.sh\n# Archiwizacja katalogu serwisowego (opcjonalnie z zabezpieczeniem uprawnień)\nchmod 700 /home/lab/marcel/service/532_przed_zmianami'
+        },
+        {
+          label: 'Wznowienie usług peryferyjnych (jeśli były wstrzymywane)',
+          cmd: 'systemctl start smbd nmbd\n/etc/init.d/vnc restart # na Gentoo\n# Sprawdzenie kontenerów LXC:\nlxc-ls -f'
+        },
+        {
+          label: 'Testowe uruchomienie klienta Centrum ze stacji roboczej lub sesji VNC',
+          cmd: '# Logowanie użytkownika: lab / weryfikacja czy nie pojawia się komunikat braku licencji'
+        }
+      ],
+      checklistItems: [
+        'Plik kgp.exe bezwzględnie usunięty z katalogu klienta',
+        'Pliki update.sh usunięte lub przeniesione do zabezpieczonego archiwum',
+        'Usługi peryferyjne (Samba, Mirth, VNC) pracują w stanie aktywnym',
+        'Potwierdzono poprawne uruchomienie klienta Centrum ze stacji roboczej',
+        'Zgłoszenie Jira zaktualizowane o numer wersji, datę i czas przestoju'
+      ]
+    }
+  ];
+
+  /**
+   * Baza Komend Ściągawki Terminalowej (Z filtrowaniem i 1-Click Copy)
+   */
+  const TERMINAL_COMMANDS = [
+    {
+      id: 'cmd_psql_check',
+      category: '1. Diagnostyka Sesji & Restart PostgreSQL',
+      title: 'Weryfikacja braku aktywnych sesji bazy centrum (Musi dać: (0 rows))',
+      cmd: "SELECT * FROM pg_stat_activity WHERE datname = 'centrum';",
+      shell: 'psql -U postgres',
+      explanation: 'Dokładna komenda używana przez Adriana Wojtkowskiego. Szybki rzut oka na terminal: (0 rows) oznacza pełne bezpieczeństwo migracji DDL.'
+    },
+    {
+      id: 'cmd_psql_inline',
+      category: '1. Diagnostyka Sesji & Restart PostgreSQL',
+      title: 'Jednolinijkowe sprawdzenie sesji z poziomu powłoki Bash',
+      cmd: "psql -U postgres -c \"SELECT * FROM pg_stat_activity WHERE datname = 'centrum';\"",
+      shell: 'bash',
+      explanation: 'Wywołanie zapytania bezpośrednio z konsoli Linuksa bez konieczności wchodzenia do interaktywnego psql.'
+    },
+    {
+      id: 'cmd_gentoo_restart',
+      category: '1. Diagnostyka Sesji & Restart PostgreSQL',
+      title: 'Restart PostgreSQL na Gentoo Linux (OpenRC)',
+      cmd: '/etc/init.d/postgresql-11 restart',
+      shell: 'bash (root)',
+      explanation: 'Standardowy skrypt startowy OpenRC na serwerach Gentoo stosowanych w laboratoriach.'
+    },
+    {
+      id: 'cmd_gentoo_status',
+      category: '1. Diagnostyka Sesji & Restart PostgreSQL',
+      title: 'Status usługi PostgreSQL na Gentoo (OpenRC)',
+      cmd: '/etc/init.d/postgresql-11 status',
+      shell: 'bash (root)',
+      explanation: 'Weryfikacja czy daemon bazy danych pracuje poprawnie po restarcie.'
+    },
+    {
+      id: 'cmd_systemd_restart',
+      category: '1. Diagnostyka Sesji & Restart PostgreSQL',
+      title: 'Restart PostgreSQL na Debian / Ubuntu (systemd)',
+      cmd: 'systemctl restart postgresql',
+      shell: 'bash (root)',
+      explanation: 'Komenda restartu daemona PostgreSQL na serwerach zarządzanych przez systemd.'
+    },
+    {
+      id: 'cmd_systemd_status',
+      category: '1. Diagnostyka Sesji & Restart PostgreSQL',
+      title: 'Status usługi PostgreSQL na Debianie (systemd)',
+      cmd: 'systemctl status postgresql --no-pager',
+      shell: 'bash',
+      explanation: 'Podgląd stanu procesu i ostatnich logów startowych usługi.'
+    },
+    {
+      id: 'cmd_mkdir_service',
+      category: '2. Katalogi Robocze & Uprawnienia',
+      title: 'Utworzenie katalogu nowej wersji w strukturze Marcela',
+      cmd: 'mkdir -p /home/lab/marcel/service/532_przed_zmianami && cd /home/lab/marcel/service/532_przed_zmianami',
+      shell: 'bash',
+      explanation: 'Standardowa ścieżka serwisowa w instalacjach LIS Marcel.'
+    },
+    {
+      id: 'cmd_sed_wersja',
+      category: '2. Katalogi Robocze & Uprawnienia',
+      title: 'Trik z wycięciem INSERT INTO wersja z pierwszego pliku SQL',
+      cmd: "sed -i '1{/INSERT INTO wersja/d}' 5.2.1.sql",
+      shell: 'bash',
+      explanation: 'Usuwa kolizyjny wpis wersji z pierwszej linii pierwszego skryptu SQL, zapobiegając przerwaniu update.sh.'
+    },
+    {
+      id: 'cmd_chown_lab',
+      category: '2. Katalogi Robocze & Uprawnienia',
+      title: 'Ustawienie uprawnień właściciela lab:users dla centrum.exe',
+      cmd: 'chown lab:users /home/lab/marcel/centrum.exe',
+      shell: 'bash (root)',
+      explanation: 'Aplikacja centrum.exe musi należeć do użytkownika i grupy lab:users, aby stacje robocze miały do niej dostęp.'
+    },
+    {
+      id: 'cmd_chmod_exe',
+      category: '2. Katalogi Robocze & Uprawnienia',
+      title: 'Nadanie uprawnień wykonywalności 755 (rwxr-xr-x)',
+      cmd: 'chmod 755 /home/lab/marcel/centrum.exe',
+      shell: 'bash',
+      explanation: 'Wymagane do uruchomienia binarki przez klientów i środowisko Wine.'
+    },
+    {
+      id: 'cmd_wine_sign',
+      category: '3. Podpisywanie Binarki Wine (kgp.exe)',
+      title: 'Podpisanie licencji i aktywacja binarnego bitu PE (Kluczowe!)',
+      cmd: 'cd /home/lab/marcel/ && wine kgp.exe -a centrum.exe',
+      shell: 'bash (użytkownik lab)',
+      explanation: 'Modyfikuje bit w PE header centrum.exe oraz aktualizuje plik .key. Eliminuje ekran „czerwonej czaszki”.'
+    },
+    {
+      id: 'cmd_wine_ver',
+      category: '3. Podpisywanie Binarki Wine (kgp.exe)',
+      title: 'Sprawdzenie obecności i wersji Wine w systemie',
+      cmd: 'wine --version',
+      shell: 'bash',
+      explanation: 'Weryfikuje czy na serwerze dostępne jest środowisko Wine do uruchomienia kgp.exe.'
+    },
+    {
+      id: 'cmd_scp_get_key',
+      category: '4. Kopiowanie Satelickie (RDP & CZA marcele.pl)',
+      title: 'Pobranie pliku .key z serwera Debian (RDP) na serwer Gentoo (Wine)',
+      cmd: 'scp lab@rdp-server:/home/lab/marcel/*.key /home/lab/marcel/satellite_keys/',
+      shell: 'bash (na maszynie Gentoo)',
+      explanation: 'Używane gdy serwer RDP pracuje na czystym Debianie bez Wine — klucz podpisujemy na maszynie z Wine.'
+    },
+    {
+      id: 'cmd_scp_send_back',
+      category: '4. Kopiowanie Satelickie (RDP & CZA marcele.pl)',
+      title: 'Odesłanie podpisanego centrum.exe oraz .key na serwer RDP / CZA',
+      cmd: 'scp centrum.exe *.key lab@rdp-server:/home/lab/marcel/\nscp centrum.exe *.key lab@cza.marcele.pl:/home/lab/marcel/',
+      shell: 'bash',
+      explanation: 'Przesłanie gotowej, podpisanej binarki na serwer terminalowy RDP i serwer telepatologii CZA.'
+    },
+    {
+      id: 'cmd_pg_dump_shrink',
+      category: '5. PostgreSQL Bloat & Redukcja Dysku (1.3 TB -> 300 GB)',
+      title: 'Pełny zrzut logiczny (pg_dump format custom) przed przebudową bazy',
+      cmd: 'pg_dump -U postgres -Fc -d centrum -f /backup/centrum_$(date +%F_%H%M).dump',
+      shell: 'bash',
+      explanation: 'Metoda Adriana na drastyczną redukcję dead tuples po archiwizacji: czysty eksport danych logicznych.'
+    },
+    {
+      id: 'cmd_pg_restore_shrink',
+      category: '5. PostgreSQL Bloat & Redukcja Dysku (1.3 TB -> 300 GB)',
+      title: 'Odtworzenie bazy z czystego zrzutu do świeżej instancji (Kompaktowe tabele i indeksy)',
+      cmd: 'createdb -U postgres -O postgres centrum_nowa\npg_restore -U postgres -d centrum_nowa -v /backup/centrum_archived.dump',
+      shell: 'bash',
+      explanation: 'Nowa baza zajmuje tylko fizycznie potrzebną przestrzeń (np. 300 GB zamiast 1.3 TB zmartwiałych stron).'
+    },
+    {
+      id: 'cmd_pg_size_check',
+      category: '5. PostgreSQL Bloat & Redukcja Dysku (1.3 TB -> 300 GB)',
+      title: 'Sprawdzenie fizycznego rozmiaru bazy centrum na dysku',
+      cmd: "SELECT pg_size_pretty(pg_database_size('centrum')) AS rozmiar_bazy;",
+      shell: 'psql -U postgres',
+      explanation: 'Wyświetla czytelny rozmiar bazy danych (np. 450 GB).'
+    },
+    {
+      id: 'cmd_vacuum_full',
+      category: '5. PostgreSQL Bloat & Redukcja Dysku (1.3 TB -> 300 GB)',
+      title: 'VACUUM FULL VERBOSE tabeli (Uwaga: blokada ACCESS EXCLUSIVE!)',
+      cmd: 'VACUUM FULL VERBOSE zlecenia;',
+      shell: 'psql -U postgres -d centrum',
+      explanation: 'Przepisuje tabelę na nowo, zwalniając miejsce do systemu operacyjnego. Wymaga wyłącznej blokady i 2x tyle miejsca na dysku.'
+    },
+    {
+      id: 'cmd_mirth_status',
+      category: '6. Peryferia Szpitalne (Usługi do Kontroli)',
+      title: 'Status silnika integracyjnego Mirth Connect (port HL7 MLLP 2575)',
+      cmd: 'systemctl status mirth-connect --no-pager',
+      shell: 'bash',
+      explanation: 'Mirth Connect odpowiada za przesyłanie zleceń i wyników z analizatorów laboratoryjnych.'
+    },
+    {
+      id: 'cmd_samba_status',
+      category: '6. Peryferia Szpitalne (Usługi do Kontroli)',
+      title: 'Status udziałów sieciowych Samba (smbd, nmbd)',
+      cmd: 'systemctl status smbd nmbd --no-pager',
+      shell: 'bash',
+      explanation: 'Weryfikacja dostępności zasobów sieciowych Windows dla personelu szpitalnego.'
+    },
+    {
+      id: 'cmd_vnc_gentoo',
+      category: '6. Peryferia Szpitalne (Usługi do Kontroli)',
+      title: 'Status sesji zdalnych TigerVNC na Gentoo',
+      cmd: '/etc/init.d/vnc status',
+      shell: 'bash (root)',
+      explanation: 'Kontrola serwera pulpitu zdalnego używanego przez diagnostów i techników.'
+    },
+    {
+      id: 'cmd_lxc_list',
+      category: '6. Peryferia Szpitalne (Usługi do Kontroli)',
+      title: 'Lista i stan kontenerów LXC (np. kontenery a12, elaborat w Alab)',
+      cmd: 'lxc-ls -f',
+      shell: 'bash (root)',
+      explanation: 'Sprawdza czy kontenery aplikacji pomocniczych (a12, elaborat) są uruchomione (RUNNING) czy zatrzymane (STOPPED).'
+    },
+    {
+      id: 'cmd_clean_kgp',
+      category: '2. Katalogi Robocze & Uprawnienia',
+      title: 'Bezpieczne usunięcie generatora kgp.exe po aktualizacji',
+      cmd: 'cd /home/lab/marcel/ && rm -f kgp.exe update.sh',
+      shell: 'bash (root)',
+      explanation: 'Usuwa narzędzie licencjonowania z katalogu klienta po pomyślnym podpisaniu centrum.exe.'
+    }
+  ];
+
+  /**
+   * Główna funkcja renderująca moduł SOP
+   */
+  function renderPgUpdateSopModule() {
+    const container = document.getElementById('pg-update-sop-container');
+    if (!container) return;
+
+    loadChecklistState();
+
+    container.innerHTML = `
+      <div class="sre-layout" style="display: flex; flex-direction: column; gap: 20px;">
+        
+        <!-- Pasek górny: Nawigacja podzakładek & Wskaźnik postępu -->
+        <div class="card" style="padding: 16px 20px; border-left: 4px solid var(--accent-cyan);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-size: 1.8rem;">🐘</span>
+              <div>
+                <h3 style="margin: 0; font-size: 1.25rem;">Standard Operating Procedure (SOP) • PostgreSQL &amp; Centrum</h3>
+                <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 2px;">
+                  Baza wiedzy i instrukcja produkcyjna: <strong>Adrian Wojtkowski</strong> | Cel: <strong>LIS Marcel / PostgreSQL 11+ (Gentoo &amp; Debian)</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- Akcje globalne: Zapisz do Runbooków & Reset -->
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button class="btn btn-secondary btn-sm" id="sop-save-runbook-btn" title="Zapisz ten SOP jako procedurę w Bazie Runbooków">
+                💾 Zapisz do Bazy Runbooków
+              </button>
+              <button class="btn btn-secondary btn-sm" id="sop-reset-checklist-btn" title="Zresetuj odznaczone kroki checklisty">
+                🔄 Resetuj Checklistę
+              </button>
+            </div>
+          </div>
+
+          <!-- Pasek postępu kroków SOP -->
+          <div style="margin-top: 14px; background: rgba(0,0,0,0.25); border-radius: var(--radius-sm); padding: 10px 14px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 6px;">
+              <span>Postęp realizacji procedury:</span>
+              <strong id="sop-progress-label">0 / 6 kroków (0%)</strong>
+            </div>
+            <div style="height: 8px; background: var(--bg-primary); border-radius: 4px; overflow: hidden;">
+              <div id="sop-progress-bar" style="height: 100%; width: 0%; background: var(--accent-teal); transition: width 0.3s ease;"></div>
+            </div>
+          </div>
+
+          <!-- Zakładki wewnętrzne modułu -->
+          <div style="display: flex; gap: 8px; margin-top: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; overflow-x: auto;">
+            <button class="btn btn-sm ${sopState.activeSubTab === 'procedure' ? 'btn-primary' : 'btn-secondary'}" data-sop-subtab="procedure">
+              📋 1. Pełna Procedura Krok po Kroku (SOP)
+            </button>
+            <button class="btn btn-sm ${sopState.activeSubTab === 'cheatsheet' ? 'btn-primary' : 'btn-secondary'}" data-sop-subtab="cheatsheet">
+              ⚡ 2. Ściągawka Terminalowa (Cheat Sheet)
+            </button>
+            <button class="btn btn-sm ${sopState.activeSubTab === 'bloat' ? 'btn-primary' : 'btn-secondary'}" data-sop-subtab="bloat">
+              🗄️ 3. PostgreSQL Bloat &amp; Redukcja Dysku (1.3 TB ➔ 300 GB)
+            </button>
+            <button class="btn btn-sm ${sopState.activeSubTab === 'peripherals' ? 'btn-primary' : 'btn-secondary'}" data-sop-subtab="peripherals">
+              🛡️ 4. Peryferia Szpitalne (Usługi do Zatrzymania)
+            </button>
+          </div>
+        </div>
+
+        <!-- Główna zawartość wybranej podzakładki -->
+        <div id="sop-subtab-content"></div>
+
+      </div>
+    `;
+
+    bindHeaderEvents();
+    renderActiveSubTab();
+    updateProgressUI();
+  }
+
+  function bindHeaderEvents() {
+    const container = document.getElementById('pg-update-sop-container');
+    if (!container) return;
+
+    // Przełączanie podzakładek
+    container.querySelectorAll('[data-sop-subtab]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget.getAttribute('data-sop-subtab');
+        if (target) {
+          sopState.activeSubTab = target;
+          container.querySelectorAll('[data-sop-subtab]').forEach(b => {
+            b.classList.remove('btn-primary');
+            b.classList.add('btn-secondary');
+          });
+          e.currentTarget.classList.remove('btn-secondary');
+          e.currentTarget.classList.add('btn-primary');
+          renderActiveSubTab();
+        }
+      });
+    });
+
+    // Reset checklisty
+    const resetBtn = document.getElementById('sop-reset-checklist-btn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        if (confirm('Czy na pewno chcesz zresetować stan checklisty aktualizacji PostgreSQL?')) {
+          sopState.completedSteps = {};
+          saveChecklistState();
+          renderActiveSubTab();
+          updateProgressUI();
+          showToast('Zresetowano stan checklisty SOP.', 'info');
+        }
+      });
+    }
+
+    // Zapis do bazy runbooków
+    const saveRunbookBtn = document.getElementById('sop-save-runbook-btn');
+    if (saveRunbookBtn) {
+      saveRunbookBtn.addEventListener('click', () => {
+        savePgUpdateRunbookUI();
+      });
+    }
+  }
+
+  function updateProgressUI() {
+    const totalSteps = SOP_STEPS.length;
+    let completedCount = 0;
+
+    SOP_STEPS.forEach(step => {
+      if (sopState.completedSteps[step.id]) {
+        completedCount++;
+      }
+    });
+
+    const percent = Math.round((completedCount / totalSteps) * 100);
+
+    const label = document.getElementById('sop-progress-label');
+    if (label) {
+      label.textContent = `${completedCount} / ${totalSteps} kroków (${percent}%)`;
+    }
+
+    const bar = document.getElementById('sop-progress-bar');
+    if (bar) {
+      bar.style.width = `${percent}%`;
+      bar.style.backgroundColor = percent === 100 ? '#06d6a0' : (percent > 50 ? '#3a86ff' : '#00b4d8');
+    }
+  }
+
+  function renderActiveSubTab() {
+    const content = document.getElementById('sop-subtab-content');
+    if (!content) return;
+
+    if (sopState.activeSubTab === 'procedure') {
+      renderProcedureTab(content);
+    } else if (sopState.activeSubTab === 'cheatsheet') {
+      renderCheatsheetTab(content);
+    } else if (sopState.activeSubTab === 'bloat') {
+      renderBloatTab(content);
+    } else if (sopState.activeSubTab === 'peripherals') {
+      renderPeripheralsTab(content);
+    }
+  }
+
+  /**
+   * 1. PODZAKŁADKA: PROCEDURA KROK PO KROKU
+   */
+  function renderProcedureTab(container) {
+    let stepsHtml = '';
+
+    SOP_STEPS.forEach(step => {
+      const isDone = !!sopState.completedSteps[step.id];
+
+      // Komendy Basha / SQL
+      let cmdsHtml = '';
+      step.commands.forEach((c, idx) => {
+        const cmdId = `sop-cmd-${step.id}-${idx}`;
+        cmdsHtml += `
+          <div style="margin-bottom: 12px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">${escapeHtml(c.label)}</span>
+              <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('${cmdId}')" style="font-size: 0.75rem; padding: 2px 8px;">
+                📋 Kopiuj
+              </button>
+            </div>
+            <pre style="margin: 0; background: transparent; padding: 0; overflow-x: auto;"><code id="${cmdId}" style="font-family: var(--font-mono); font-size: 0.85rem; color: #a5d6ff;">${escapeHtml(c.cmd)}</code></pre>
+          </div>
+        `;
+      });
+
+      // Punkty kontrolne
+      let checklistHtml = '';
+      step.checklistItems.forEach((item, itemIdx) => {
+        const itemKey = `${step.id}_item_${itemIdx}`;
+        const itemChecked = !!sopState.completedSteps[itemKey];
+        checklistHtml += `
+          <label style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; cursor: pointer; font-size: 0.85rem;">
+            <input type="checkbox" data-sop-item-key="${itemKey}" data-sop-step-id="${step.id}" ${itemChecked ? 'checked' : ''} style="margin-top: 3px;">
+            <span style="${itemChecked ? 'text-decoration: line-through; color: var(--text-muted);' : ''}">${escapeHtml(item)}</span>
+          </label>
+        `;
+      });
+
+      stepsHtml += `
+        <div class="card" style="margin-bottom: 18px; border-left: 4px solid ${step.badgeColor}; ${isDone ? 'opacity: 0.85;' : ''}">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="width: 32px; height: 32px; border-radius: 50%; background: ${step.badgeColor}; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700;">
+                ${isDone ? '✓' : step.number}
+              </div>
+              <div>
+                <h4 style="margin: 0; font-size: 1.1rem;">Krok ${step.number}: ${escapeHtml(step.title)}</h4>
+                <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+                  <span class="badge" style="background: ${step.badgeColor}22; color: ${step.badgeColor}; border: 1px solid ${step.badgeColor}44; font-size: 0.75rem;">${escapeHtml(step.badge)}</span>
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">⏱️ Szacowany czas: ${escapeHtml(step.estimatedTime)}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Oznaczenie całego kroku jako ukończony -->
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; background: var(--bg-primary); padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 0.82rem; font-weight: 600;">
+              <input type="checkbox" data-sop-step-toggle="${step.id}" ${isDone ? 'checked' : ''}>
+              <span>Krok ${step.number} zaliczony</span>
+            </label>
+          </div>
+
+          <p style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 12px;">
+            ${escapeHtml(step.summary)}
+          </p>
+
+          <!-- Rationale & Adrian Wojtkowski Note -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 16px;">
+            <div style="background: rgba(58, 134, 255, 0.08); border-left: 3px solid #3a86ff; padding: 10px 14px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 0.85rem;">
+              <strong style="color: #3a86ff;">🎯 Dlaczego to robimy:</strong>
+              <div style="color: var(--text-secondary); margin-top: 4px;">${escapeHtml(step.why)}</div>
+            </div>
+            <div style="background: rgba(255, 183, 3, 0.08); border-left: 3px solid #ffb703; padding: 10px 14px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 0.85rem;">
+              <strong style="color: #ffb703;">💡 Wiedza Adriana Wojtkowskiego:</strong>
+              <div style="color: var(--text-secondary); margin-top: 4px;">${escapeHtml(step.adrianNote)}</div>
+            </div>
+          </div>
+
+          <!-- Komendy terminalowe -->
+          <div style="margin-bottom: 16px;">
+            <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 8px;">
+              💻 Komendy do wykonania:
+            </div>
+            ${cmdsHtml}
+          </div>
+
+          <!-- Checklist pozycji kontrolnych -->
+          <div style="background: var(--bg-primary); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-teal); margin-bottom: 8px;">
+              ✅ Lista kontrolna jakościowa (Quality Gates):
+            </div>
+            ${checklistHtml}
+          </div>
+
+        </div>
+      `;
+    });
+
+    container.innerHTML = `
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">
+          Poniżej znajduje się oficjalna sekwencja 6 kroków aktualizacji bazy PostgreSQL i systemu Centrum w środowiskach szpitalnych i laboratoryjnych. Każdy krok zawiera uzasadnienie architektoniczne, uwagi Adriana Wojtkowskiego oraz gotowe polecenia z funkcją 1-Click Copy.
+        </div>
+        ${stepsHtml}
+      </div>
+    `;
+
+    bindProcedureEvents(container);
+  }
+
+  function bindProcedureEvents(container) {
+    // Checkbox kroku głównego
+    container.querySelectorAll('[data-sop-step-toggle]').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        const stepId = e.target.getAttribute('data-sop-step-toggle');
+        sopState.completedSteps[stepId] = e.target.checked;
+        saveChecklistState();
+        renderProcedureTab(container);
+        updateProgressUI();
+        if (e.target.checked) {
+          showToast(`Krok oznaczony jako ukończony.`, 'success');
+        }
+      });
+    });
+
+    // Checkbox pojedynczych pozycji checklisty
+    container.querySelectorAll('[data-sop-item-key]').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        const itemKey = e.target.getAttribute('data-sop-item-key');
+        const stepId = e.target.getAttribute('data-sop-step-id');
+        sopState.completedSteps[itemKey] = e.target.checked;
+
+        // Sprawdź czy wszystkie itemy danego kroku są zaznaczone
+        const step = SOP_STEPS.find(s => s.id === stepId);
+        if (step) {
+          const allItemsDone = step.checklistItems.every((_, idx) => !!sopState.completedSteps[`${stepId}_item_${idx}`]);
+          if (allItemsDone) {
+            sopState.completedSteps[stepId] = true;
+          }
+        }
+
+        saveChecklistState();
+        renderProcedureTab(container);
+        updateProgressUI();
+      });
+    });
+  }
+
+  /**
+   * 2. PODZAKŁADKA: ŚCIĄGAWKA TERMINALOWA (CHEAT SHEET)
+   */
+  function renderCheatsheetTab(container) {
+    // Filtrowanie komend
+    const query = (sopState.searchQuery || '').toLowerCase().trim();
+    const filtered = TERMINAL_COMMANDS.filter(c => {
+      if (!query) return true;
+      return c.title.toLowerCase().includes(query) ||
+             c.cmd.toLowerCase().includes(query) ||
+             c.category.toLowerCase().includes(query) ||
+             c.explanation.toLowerCase().includes(query);
+    });
+
+    // Grupowanie według kategorii
+    const categories = {};
+    filtered.forEach(cmd => {
+      if (!categories[cmd.category]) {
+        categories[cmd.category] = [];
+      }
+      categories[cmd.category].push(cmd);
+    });
+
+    let groupsHtml = '';
+    const catKeys = Object.keys(categories);
+
+    if (catKeys.length === 0) {
+      groupsHtml = `
+        <div class="card" style="text-align: center; padding: 40px;">
+          <div style="font-size: 2rem; margin-bottom: 10px;">🔍</div>
+          <h4>Nie znaleziono komend dla frazy: „${escapeHtml(sopState.searchQuery)}”</h4>
+          <p style="color: var(--text-secondary); font-size: 0.85rem;">Spróbuj wpisać inną frazę, np. psql, restart, wine, kgp, scp lub vacuum.</p>
+        </div>
+      `;
+    } else {
+      catKeys.forEach(catName => {
+        const cmds = categories[catName];
+        let itemsHtml = '';
+
+        cmds.forEach(item => {
+          itemsHtml += `
+            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px;">
+                <div>
+                  <h5 style="margin: 0; font-size: 0.95rem; color: var(--text-primary);">${escapeHtml(item.title)}</h5>
+                  <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Środowisko: <code style="color: var(--accent-cyan);">${escapeHtml(item.shell)}</code></div>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('${item.id}')" style="font-size: 0.8rem; padding: 4px 10px;">
+                  📋 Kopiuj
+                </button>
+              </div>
+
+              <div style="background: var(--bg-input); border-radius: 4px; padding: 8px 12px; margin-bottom: 8px;">
+                <pre style="margin: 0; background: transparent; padding: 0; overflow-x: auto;"><code id="${item.id}" style="font-family: var(--font-mono); font-size: 0.85rem; color: #79c0ff;">${escapeHtml(item.cmd)}</code></pre>
+              </div>
+
+              <div style="font-size: 0.82rem; color: var(--text-secondary);">
+                💡 ${escapeHtml(item.explanation)}
+              </div>
+            </div>
+          `;
+        });
+
+        groupsHtml += `
+          <div style="margin-bottom: 24px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+              <h4 style="margin: 0; font-size: 1.05rem; color: var(--accent-cyan);">${escapeHtml(catName)}</h4>
+              <span class="badge" style="background: rgba(0, 180, 216, 0.15); color: var(--accent-cyan); font-size: 0.72rem;">${cmds.length} komend</span>
+            </div>
+            ${itemsHtml}
+          </div>
+        `;
+      });
+    }
+
+    container.innerHTML = `
+      <div class="card" style="padding: 16px 20px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+          <div>
+            <h4 style="margin: 0;">⚡ Podręczna Ściągawka Terminalowa (Adrian Wojtkowski Edition)</h4>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 2px;">
+              Błyskawiczne kopiowanie przetestowanych poleceń Bash, psql i OpenRC.
+            </div>
+          </div>
+          <div style="flex: 1; max-width: 380px;">
+            <input 
+              type="text" 
+              class="form-control" 
+              id="sop-cheatsheet-search" 
+              placeholder="🔍 Szukaj komendy (np. pg_stat_activity, wine, restart, scp)..." 
+              value="${escapeHtml(sopState.searchQuery)}"
+              style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary);"
+            >
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <span style="font-size: 0.78rem; color: var(--text-muted); align-self: center;">Szybkie filtry:</span>
+          <button class="btn btn-secondary btn-sm" onclick="window.setPgSopFilter('')" style="font-size: 0.75rem; padding: 2px 8px;">Wszystkie</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.setPgSopFilter('pg_stat_activity')" style="font-size: 0.75rem; padding: 2px 8px;">pg_stat_activity</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.setPgSopFilter('restart')" style="font-size: 0.75rem; padding: 2px 8px;">Restart usługi</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.setPgSopFilter('wine')" style="font-size: 0.75rem; padding: 2px 8px;">Wine &amp; kgp.exe</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.setPgSopFilter('scp')" style="font-size: 0.75rem; padding: 2px 8px;">Satelity RDP/CZA</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.setPgSopFilter('vacuum')" style="font-size: 0.75rem; padding: 2px 8px;">Bloat &amp; Vacuum</button>
+        </div>
+      </div>
+
+      <div>
+        ${groupsHtml}
+      </div>
+    `;
+
+    const searchInput = document.getElementById('sop-cheatsheet-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        sopState.searchQuery = e.target.value;
+        renderCheatsheetTab(container);
+        const inputRef = document.getElementById('sop-cheatsheet-search');
+        if (inputRef) {
+          inputRef.focus();
+          inputRef.setSelectionRange(inputRef.value.length, inputRef.value.length);
+        }
+      });
+    }
+  }
+
+  /**
+   * 3. PODZAKŁADKA: POSTGRESQL BLOAT & REDUKCJA DYSKU (1.3 TB ➔ 300 GB)
+   */
+  function renderBloatTab(container) {
+    container.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+        
+        <!-- Karta wprowadzenia architektonicznego -->
+        <div class="card" style="border-left: 4px solid #8338ec;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <span style="font-size: 1.8rem;">🗄️</span>
+            <div>
+              <h3 style="margin: 0;">Problem PostgreSQL Bloat &amp; Strategia Zmniejszania Bazy</h3>
+              <div style="font-size: 0.82rem; color: var(--text-secondary);">
+                Jak Adrian Wojtkowski zmniejszył bazę szpitalną z 1.3 TB do 300 GB po usunięciu starych danych
+              </div>
+            </div>
+          </div>
+
+          <p style="font-size: 0.9rem; line-height: 1.6; color: var(--text-primary); margin-bottom: 14px;">
+            W silnikach baz danych z mechanizmem <strong>MVCC (Multi-Version Concurrency Control)</strong>, takich jak PostgreSQL, polecenie <code>DELETE</code> <strong>nie zwalnia ani jednego bajtu miejsca na dysku</strong>. Zamiast tego rekord jest jedynie oznaczany jako martwy (dead tuple). 
+          </p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 16px;">
+            <div style="background: var(--bg-input); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <h5 style="color: #ef476f; margin-top: 0;">❌ Dlaczego zwykły VACUUM nie zmniejsza pliku?</h5>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0;">
+                Zwykły proces <code>VACUUM</code> oczyszcza wskaźniki i rejestruje puste miejsce w tzw. <em>Free Space Map (FSM)</em>. Miejsce to może być ponownie użyte przez nowe instrukcje <code>INSERT</code>, ale fizyczny rozmiar plików relacji na dysku (w katalogu <code>/var/lib/postgresql/data/base/</code>) pozostaje bez zmian.
+              </p>
+            </div>
+
+            <div style="background: var(--bg-input); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <h5 style="color: #ffb703; margin-top: 0;">⚠️ Pułapka i ryzyko VACUUM FULL</h5>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0;">
+                <code>VACUUM FULL</code> przepisuje tabelę, usuwając bloat, ale:
+                <br>1. Zakłada wyłączną blokadę <strong>ACCESS EXCLUSIVE</strong> (odrzuca nawet zapytania SELECT od laborantów).
+                <br>2. Wymaga <strong>dodatkowej wolnej przestrzeni dyskowej równej rozmiarowi tabeli</strong>. Jeśli dysk ma 95% zapełnienia, VACUUM FULL wyłoży system z błędem <em>No space left on device</em>!
+              </p>
+            </div>
+
+            <div style="background: var(--bg-input); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <h5 style="color: #06d6a0; margin-top: 0;">🏆 Rozwiązanie Adriana: pg_dump &amp; pg_restore</h5>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0;">
+                W sytuacji dużej bazy po archiwizacji (np. usunięcie zleceń sprzed 5 lat) najlepszą, bezpieczną procedurą jest wykonanie logicznego zrzutu <code>pg_dump -Fc</code> i odtworzenie go do nowej bazy. Odtworzone tabele i indeksy B-Tree są w 100% zoptymalizowane i pozbawione bloatu.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sekcja porównania i workflow redukcji 1.3 TB -> 300 GB -->
+        <div class="card">
+          <h4 style="margin-top: 0; color: var(--accent-cyan);">🚀 Pełna Procedura Kurczenia Bazy (Dump + Restore Workflow)</h4>
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+            Poniższy proces był stosowany w Alab przy redukcji bazy z 1.3 TB do 300 GB w kontrolowanym oknie serwisowym.
+          </p>
+
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            
+            <div style="background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <strong style="color: var(--accent-cyan); font-size: 0.88rem;">Krok 1: Weryfikacja bieżącego bloatu i rozmiaru bazy</strong>
+                <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('bloat-sql-1')" style="font-size: 0.75rem; padding: 2px 8px;">📋 Kopiuj SQL</button>
+              </div>
+              <pre style="margin: 0; background: transparent; padding: 0;"><code id="bloat-sql-1" style="font-family: var(--font-mono); font-size: 0.85rem; color: #a5d6ff;">-- Sprawdzenie rozmiaru bazy i 10 największych relacji
+SELECT 
+    schemaname, 
+    relname AS tabela, 
+    pg_size_pretty(pg_total_relation_size(relid)) AS rozmiar_calkowity,
+    pg_size_pretty(pg_relation_size(relid)) AS rozmiar_danych,
+    pg_size_pretty(pg_total_relation_size(relid) - pg_relation_size(relid)) AS rozmiar_indeksow,
+    n_dead_tup AS martwe_rekordy
+FROM pg_stat_user_tables 
+ORDER BY pg_total_relation_size(relid) DESC 
+LIMIT 10;</code></pre>
+            </div>
+
+            <div style="background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <strong style="color: var(--accent-cyan); font-size: 0.88rem;">Krok 2: Wykonanie logicznego zrzutu kompresowanego (pg_dump format custom)</strong>
+                <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('bloat-cmd-2')" style="font-size: 0.75rem; padding: 2px 8px;">📋 Kopiuj Bash</button>
+              </div>
+              <pre style="margin: 0; background: transparent; padding: 0;"><code id="bloat-cmd-2" style="font-family: var(--font-mono); font-size: 0.85rem; color: #a5d6ff;"># Zrzut w formacie Custom z kompresją strumieniową (można uruchomić wielowątkowo z -j 4)
+pg_dump -U postgres -Fc -d centrum -f /backup/centrum_czyste_$(date +%F).dump</code></pre>
+            </div>
+
+            <div style="background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <strong style="color: var(--accent-cyan); font-size: 0.88rem;">Krok 3: Utworzenie nowej bazy i odtworzenie struktury oraz danych</strong>
+                <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('bloat-cmd-3')" style="font-size: 0.75rem; padding: 2px 8px;">📋 Kopiuj Bash</button>
+              </div>
+              <pre style="margin: 0; background: transparent; padding: 0;"><code id="bloat-cmd-3" style="font-family: var(--font-mono); font-size: 0.85rem; color: #a5d6ff;"># Utworzenie świeżej bazy o identycznym kodowaniu (np. WIN1250 lub UTF8)
+createdb -U postgres -E WIN1250 -O lab centrum_skurczona
+
+# Odtworzenie danych bez bloatu
+pg_restore -U postgres -d centrum_skurczona -v /backup/centrum_czyste_*.dump</code></pre>
+            </div>
+
+            <div style="background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <strong style="color: var(--accent-cyan); font-size: 0.88rem;">Krok 4: Podmiana nazw baz (Atomic Switch) i weryfikacja</strong>
+                <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('bloat-cmd-4')" style="font-size: 0.75rem; padding: 2px 8px;">📋 Kopiuj SQL</button>
+              </div>
+              <pre style="margin: 0; background: transparent; padding: 0;"><code id="bloat-cmd-4" style="font-family: var(--font-mono); font-size: 0.85rem; color: #a5d6ff;">-- W konsoli psql jako postgres:
+ALTER DATABASE centrum RENAME TO centrum_stara_bloat;
+ALTER DATABASE centrum_skurczona RENAME TO centrum;
+
+-- Po upewnieniu się że aplikacja działa i raporty się otwierają:
+-- DROP DATABASE centrum_stara_bloat;</code></pre>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    `;
+  }
+
+  /**
+   * 4. PODZAKŁADKA: PERYFERIA SZPITALNE (USŁUGI DO ZATRZYMANIA)
+   */
+  function renderPeripheralsTab(container) {
+    const peripherals = [
+      {
+        name: 'TigerVNC / Pulpity Zdalne',
+        desc: 'Sesje zdalne personelu i techników laboratorium. Zatrzymanie zapobiega uruchamianiu aplikacji Marcel w trakcie podmiany plików wykonywalnych.',
+        serviceGentoo: '/etc/init.d/vnc stop',
+        serviceDebian: 'systemctl stop vncserver@:1',
+        icon: '🖥️'
+      },
+      {
+        name: 'Samba (smbd & nmbd)',
+        desc: 'Udziały sieciowe Windows wykorzystywane do wymiany plików wyników, skanów i wydruków PDF ze stacjami roboczymi.',
+        serviceGentoo: '/etc/init.d/samba stop',
+        serviceDebian: 'systemctl stop smbd nmbd',
+        icon: '📁'
+      },
+      {
+        name: 'Cron / Zadania Harmonogramu',
+        desc: 'Skrypty cykliczne (ETL, nocne backupy, synchronizatory ze szpitalnym HIS). Jeśli skrypt uruchomi się w trakcie aktualizacji, spowoduje konflikt bazy.',
+        serviceGentoo: '/etc/init.d/cron stop',
+        serviceDebian: 'systemctl stop cron',
+        icon: '⏰'
+      },
+      {
+        name: 'Mirth Connect (HL7 Integrator)',
+        desc: 'Silnik integracyjny HL7 v2 / MLLP odbierający wyniki z analizatorów na porcie 2575. Musi zostać wstrzymany, aby nie próbował zapisywać danych w migracyjnej bazie.',
+        serviceGentoo: '/etc/init.d/mirth-connect stop',
+        serviceDebian: 'systemctl stop mirth-connect',
+        icon: '🔬'
+      },
+      {
+        name: 'Kontenery LXC (np. a12, elaborat w Alab)',
+        desc: 'Kontenery systemowe hostingujące moduły webowe i satelity laboratoryjne w infrastrukturze Alab.',
+        serviceGentoo: 'lxc-stop -n a12\nlxc-stop -n elaborat',
+        serviceDebian: 'lxc-stop -n a12\nlxc-stop -n elaborat',
+        icon: '📦'
+      }
+    ];
+
+    let cardsHtml = '';
+    peripherals.forEach((p, idx) => {
+      const gId = `periph-g-${idx}`;
+      const dId = `periph-d-${idx}`;
+
+      cardsHtml += `
+        <div class="card" style="margin-bottom: 14px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <span style="font-size: 1.5rem;">${p.icon}</span>
+            <div>
+              <h4 style="margin: 0; font-size: 1.05rem;">${escapeHtml(p.name)}</h4>
+              <div style="font-size: 0.82rem; color: var(--text-secondary);">${escapeHtml(p.desc)}</div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 10px;">
+            <div style="background: var(--bg-input); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 600;">Gentoo (OpenRC):</span>
+                <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('${gId}')" style="font-size: 0.7rem; padding: 2px 6px;">📋 Kopiuj</button>
+              </div>
+              <pre style="margin: 0; background: transparent; padding: 0;"><code id="${gId}" style="font-family: var(--font-mono); font-size: 0.8rem; color: #a5d6ff;">${escapeHtml(p.serviceGentoo)}</code></pre>
+            </div>
+
+            <div style="background: var(--bg-input); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <span style="font-size: 0.75rem; color: var(--accent-teal); font-weight: 600;">Debian / Ubuntu (systemd):</span>
+                <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('${dId}')" style="font-size: 0.7rem; padding: 2px 6px;">📋 Kopiuj</button>
+              </div>
+              <pre style="margin: 0; background: transparent; padding: 0;"><code id="${dId}" style="font-family: var(--font-mono); font-size: 0.8rem; color: #a5d6ff;">${escapeHtml(p.serviceDebian)}</code></pre>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = `
+      <div class="card" style="padding: 16px 20px; margin-bottom: 18px; border-left: 4px solid var(--accent-teal);">
+        <h4 style="margin: 0;">🛡️ Lista Kontrolna Usług Peryferyjnych (Przed i Po Aktualizacji)</h4>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px; margin-bottom: 0;">
+          Podczas aktualizacji bazy danych i binariów Centrum należy tymczasowo wstrzymać usługi towarzyszące, aby zapobiec modyfikacjom tabel przez systemy zintegrowane i otwartym blokadom plików SMB.
+        </p>
+      </div>
+
+      <div>
+        ${cardsHtml}
+      </div>
+    `;
+  }
+
+  /**
+   * Zapis do Bazy Runbooków Hubu
+   */
+  function savePgUpdateRunbookUI() {
+    if (!window.appState || typeof window.appState.saveIncidentRunbook !== 'function') {
+      showToast('Moduł appState nie jest w pełni załadowany.', 'warning');
+      return;
+    }
+
+    const runbook = {
+      id: 'runbook_pg_update_' + Date.now(),
+      title: 'SOP: Aktualizacja Bazy PostgreSQL & Centrum (LIS Marcel)',
+      system: 'PostgreSQL / Centrum LIS',
+      category: 'Procedura Produkcyjna',
+      createdAt: new Date().toISOString(),
+      author: 'Adrian Wojtkowski / Zespół SRE',
+      severity: 'Planned Maintenance',
+      summary: 'Oficjalna procedura aktualizacji bazy PostgreSQL i oprogramowania Centrum z obsługą zero-connection check, OpenRC, triku tabeli wersja, binarki Wine kgp.exe oraz serwerów satelitarnych RDP i CZA.',
+      steps: SOP_STEPS.map(s => ({
+        stepNumber: s.number,
+        title: s.title,
+        keyCommand: s.commands[0]?.cmd || '',
+        adrianNote: s.adrianNote
+      })),
+      verified: true
+    };
+
+    window.appState.saveIncidentRunbook(runbook);
+    showToast('Pomyślnie zapisano procedurę SOP w Bazie Runbooków Hubu!', 'success');
+  }
+
+  /**
+   * Globalne pomocniki dostępne z okna przeglądarki
+   */
+  window.copyPgSopText = function (elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const text = el.textContent || el.innerText || '';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Skopiowano polecenie do schowka!', 'success');
+      }).catch(() => {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  };
+
+  function fallbackCopy(text) {
+    const tempInput = document.createElement('textarea');
+    tempInput.value = text;
+    tempInput.style.position = 'fixed';
+    tempInput.style.left = '-9999px';
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    try {
+      document.execCommand('copy');
+      showToast('Skopiowano do schowka!', 'success');
+    } catch (e) {
+      showToast('Nie udało się skopiować automatycznie.', 'warning');
+    }
+    document.body.removeChild(tempInput);
+  }
+
+  window.setPgSopFilter = function (keyword) {
+    sopState.searchQuery = keyword;
+    const container = document.getElementById('sop-subtab-content');
+    if (container) {
+      renderCheatsheetTab(container);
+    }
+  };
+
+  // Rejestracja w obiekcie globalnym window
+  window.renderPgUpdateSopModule = renderPgUpdateSopModule;
+  window.savePgUpdateRunbookUI = savePgUpdateRunbookUI;
+  window.PG_UPDATE_SOP = {
+    steps: SOP_STEPS,
+    commands: TERMINAL_COMMANDS,
+    saveChecklistState,
+    loadChecklistState
+  };
+
+})();

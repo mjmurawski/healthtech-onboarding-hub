@@ -40,6 +40,9 @@ function initApp() {
   if (typeof window.renderAnsibleSREModule === 'function') {
     window.renderAnsibleSREModule();
   }
+  if (typeof window.renderPgUpdateSopModule === 'function') {
+    window.renderPgUpdateSopModule();
+  }
 
   // Subskrypcja zmian stanu
   if (window.appState && typeof window.appState.subscribe === 'function') {
@@ -298,6 +301,13 @@ function renderDashboard() {
           <h4 style="color: #8338ec;">Automatyzacja SRE & Ansible</h4>
           <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 6px;">
             Katalog idempotentnych playbooków SRE, role, inventory, hybrydowe skrypty Python + Bash, parser wyników PLAY RECAP i generator automatyzacji.
+          </p>
+        </div>
+        <div class="card" style="cursor: pointer; border-color: #00b4d8; border-width: 1px; border-style: solid;" data-switch-tab="tab-pg-update-sop">
+          <div style="font-size: 1.8rem; margin-bottom: 10px;">🐘</div>
+          <h4 style="color: #00b4d8;">Aktualizacja PostgreSQL (SOP)</h4>
+          <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 6px;">
+            Produkcyjna procedura aktualizacji bazy i binariów: weryfikacja sesji (0 rows), OpenRC/Gentoo, trik tabeli wersja, kgp.exe Wine, satelity RDP/CZA i ściągawka komend.
           </p>
         </div>
       </div>

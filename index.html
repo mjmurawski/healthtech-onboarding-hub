@@ -90,6 +90,10 @@
           <span class="nav-icon">🤖</span>
           <span>Automatyzacja SRE & Ansible</span>
         </div>
+        <div class="nav-item" data-tab="tab-pg-update-sop">
+          <span class="nav-icon">🐘</span>
+          <span>Aktualizacja PostgreSQL (SOP)</span>
+        </div>
       </nav>
 
       <div class="sidebar-footer">
@@ -374,6 +378,19 @@
           <div id="ansible-sre-container"></div>
         </div>
 
+        <!-- Moduł: Aktualizacja PostgreSQL & Centrum (SOP) -->
+        <div class="tab-pane" id="tab-pg-update-sop">
+          <div class="module-header">
+            <div class="module-tag">Standard Operating Procedure • PostgreSQL &amp; Centrum</div>
+            <h1>🐘 Aktualizacja Bazy PostgreSQL &amp; Centrum (SOP)</h1>
+            <p>
+              Oficjalna, produkcyjna procedura aktualizacji bazy PostgreSQL i systemu Centrum (autorstwa Adriana Wojtkowskiego).
+              Krok po kroku: zero-connection check, OpenRC/systemd, trik z tabelą wersja, aktualizacja binariów, podpisywanie licencji Wine (kgp.exe), obsługa satelitów (RDP/CZA) oraz ściągawka komend terminalowych.
+            </p>
+          </div>
+          <div id="pg-update-sop-container"></div>
+        </div>
+
       </div>
     </main>
 
@@ -410,6 +427,7 @@
   <script src="js/patexpert-docs.js"></script>
   <script src="js/quick-consultant.js"></script>
   <script src="js/ansible-sre.js"></script>
+  <script src="js/pg-update-sop.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
