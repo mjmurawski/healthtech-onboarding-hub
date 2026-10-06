@@ -131,15 +131,28 @@ steps.forEach(step => {
 });
 console.log('✅ STRUKTURA KROKÓW: Wszystkie 6 kroków są w 100% kompletne');
 
-// === TEST 3: Precyzja komendy zero-connection check Adriana Wojtkowskiego ===
-console.log('\n=== TEST 3: Weryfikacja Zero-Connection Check (Adrian Wojtkowski) ===');
+// === TEST 3: Precyzja komendy zero-connection check Adriana Wojtkowskiego & Kontrola Usług ===
+console.log('\n=== TEST 3: Weryfikacja Zero-Connection Check & Kontroli Usług (Adrian Wojtkowski) ===');
 const step1 = steps.find(s => s.id === 'step_1');
 const checkCmd = step1.commands.find(c => c.cmd.includes("SELECT * FROM pg_stat_activity WHERE datname = 'centrum';"));
 assert.ok(checkCmd, "Krok 1 musi zawierać dokładne zapytanie: SELECT * FROM pg_stat_activity WHERE datname = 'centrum';");
 assert.ok(step1.adrianNote.includes('(0 rows)'), "Krok 1 musi tłumaczyć wymóg szybkiego sprawdzenia (0 rows)");
+
+// Komenda rc-status
+assert.ok(step1.commands.some(c => c.cmd.includes('rc-status')), 'Krok 1 musi zawierać komendę rc-status do sprawdzenia procesów/usług');
+assert.ok(step1.adrianNote.includes('rc-status'), 'Krok 1 w notatce Adriana musi wyjaśniać użycie rc-status przed logowaniem');
+
+// Komendy zatrzymania procesu / odcięcia połączeń
+assert.ok(step1.commands.some(c => c.cmd.includes('/etc/init.d/postgresql-11 stop')), 'Krok 1 musi zawierać zatrzymanie PostgreSQL na Gentoo OpenRC');
+assert.ok(step1.commands.some(c => c.cmd.includes('systemctl stop postgresql')), 'Krok 1 musi zawierać zatrzymanie PostgreSQL na Debian/Ubuntu systemd');
+assert.ok(step1.commands.some(c => c.cmd.includes('pg_terminate_backend')), 'Krok 1 musi zawierać awaryjne zrzucenie sesji przez pg_terminate_backend');
+
+// Komendy uruchomienia / restartu procesu
+assert.ok(step1.commands.some(c => c.cmd.includes('/etc/init.d/postgresql-11 start')), 'Krok 1 musi zawierać uruchomienie PostgreSQL na Gentoo OpenRC');
+assert.ok(step1.commands.some(c => c.cmd.includes('systemctl start postgresql')), 'Krok 1 musi zawierać uruchomienie PostgreSQL na Debian/Ubuntu systemd');
 assert.ok(step1.commands.some(c => c.cmd.includes('/etc/init.d/postgresql-11 restart')), 'Krok 1 musi zawierać restart OpenRC na Gentoo');
 assert.ok(step1.commands.some(c => c.cmd.includes('systemctl restart postgresql')), 'Krok 1 musi zawierać restart systemd na Debianie');
-console.log('✅ ZERO-CONNECTION CHECK: Zapytanie psql i restart usługi są zgodne z zaleceniami Adriana');
+console.log('✅ ZERO-CONNECTION & SERVICE CONTROL: rc-status, stop, start, terminate i restart są w 100% zweryfikowane');
 
 // === TEST 4: Trik z tabelą wersja i Wine kgp.exe ===
 console.log('\n=== TEST 4: Trik z Tabelą wersja oraz Podpisywanie Wine kgp.exe ===');
@@ -207,7 +220,13 @@ window.renderPgUpdateSopModule();
 assert.ok(container.innerHTML.length > 500, 'Kontener modułu musi zostać wypełniony zawartością HTML');
 assert.ok(container.innerHTML.includes('Standard Operating Procedure'), 'HTML musi zawierać nagłówek procedury');
 assert.ok(container.innerHTML.includes('Adrian Wojtkowski'), 'HTML musi wskazywać autora procedury');
-console.log('✅ DOM RENDER: Kontener został poprawnie zrenderowany');
+
+const contentEl = document.getElementById('sop-subtab-content');
+assert.ok(contentEl.innerHTML.includes('Zaktualizowana Procedura Standardowa (SOP): Aktualizacja Bazy PostgreSQL i Centrum'), 'Podzakładka musi zawierać zaktualizowany nagłówek SOP');
+assert.ok(contentEl.innerHTML.includes('rc-status'), 'Wyjście procedury musi zawierać polecenie rc-status');
+assert.ok(contentEl.innerHTML.includes('>bash</span>') && contentEl.innerHTML.includes('>sql</span>'), 'Wyjście procedury musi renderować nowoczesne etykiety bloków kodu bash oraz sql');
+assert.ok(contentEl.innerHTML.includes('Quality Gates'), 'Wyjście procedury musi zawierać bramki jakościowe Quality Gates');
+console.log('✅ DOM RENDER: Kontener i podzakładka procedury z nowoczesnym layoutem zostały poprawnie zrenderowane');
 
 // === TEST 10: Zapis do Bazy Runbooków ===
 console.log('\n=== TEST 10: Weryfikacja Eksportu Procedury do Bazy Runbooków ===');
