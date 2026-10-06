@@ -105,39 +105,49 @@
       id: 'step_1',
       number: '1',
       title: 'Weryfikacja zerowej liczby połączeń & Kontrola usługi PostgreSQL',
-      titleFormatted: 'Weryfikacja i Odcięcie Połączeń do Bazy <span style="background: #2a2215; color: #e3b341; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-size: 0.95rem; font-weight: 600;">centrum</span>',
+      titleFormatted: 'Logowanie SSH, Weryfikacja Połączeń & Kontrola Bazy <span style="background: #2a2215; color: #e3b341; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-size: 0.95rem; font-weight: 600;">centrum</span>',
       badge: 'Zero-Connection Policy',
       badgeColor: '#ef476f',
       estimatedTime: '3-5 min',
-      summary: 'Sprawdzenie czy żaden klient nie korzysta z bazy centrum, weryfikacja usług przez rc-status oraz zatrzymanie i uruchomienie usługi PostgreSQL (OpenRC na Gentoo lub systemd na Debian/Ubuntu).',
+      summary: 'Połączenie z serwerem przez ssh -A (SSH Agent Forwarding), przejście do /home/lab/Marcel/, weryfikacja usług przez rc-status, sprawdzenie czy żaden klient nie korzysta z bazy centrum oraz kontrola usługi PostgreSQL (OpenRC na Gentoo lub systemd na Debian/Ubuntu).',
       descriptionHtml: 'Aktualizacja schematu bazy (skrypty SQL z <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">ALTER TABLE</span> , dropowaniem widoków itp.) wymaga wyłącznego dostępu do tabel ( <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">zlecenia</span> , <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">wykonania</span> , <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">wyniki</span> ). Jakiekolwiek aktywne połączenie spowoduje <strong style="color: #ffffff;">deadlock</strong> i zawieszenie aktualizacji na wiele godzin.',
       why: 'Modyfikacja schematu (DDL, ALTER TABLE, triggery) wymaga wyłącznych blokad (ACCESS EXCLUSIVE). Jakiekolwiek wiszące połączenie zablokuje migrację w nieskończoność lub spowoduje błąd deadlock.',
-      adrianNote: 'Adrian Wojtkowski podkreśla: przed zalogowaniem sprawdza usługi przez rc-status (czy coś nie jest już pozatrzymywane), a w konsoli psql uruchamia po prostu SELECT * FROM pg_stat_activity WHERE datname = \'centrum\';. Nie potrzebujemy wypisywać wielu kolumn (pid, usename, state...), ponieważ w terminalu chodzi o natychmiastowy rzut oka na wynik: ma być dokładnie „(0 rows)”. Jeśli wiszą sesje aplikacji, zatrzymujemy usługę (/etc/init.d/postgresql-11 stop) lub zrzucamy sesje i uruchamiamy ponownie.',
+      adrianNote: 'Adrian Wojtkowski podkreśla: do serwera klienta zawsze logujemy się z flagą -A (ssh -A root@<IP_SERWERA>), która włącza SSH Agent Forwarding. Dzięki temu lokalny agent kluczy jest przekazywany na serwer i pozwala później (w Kroku 5) na bezpośredni transfer scp / sesje ssh do satelitów Alab (Debian RDP, cza.marcele.pl) bez konieczności wgrywania klucza prywatnego na serwer bazy danych! Po zalogowaniu przechodzimy do /home/lab/Marcel/, wykonujemy ls -l (lub uruchamiamy mc), sprawdzamy stan usług przez rc-status, a w konsoli psql odpalamy SELECT * FROM pg_stat_activity WHERE datname = \'centrum\';. Chodzi o natychmiastowy rzut oka na wynik: ma być dokładnie „(0 rows)”. Jeśli wiszą sesje aplikacji, zatrzymujemy usługę (/etc/init.d/postgresql-11 stop) lub zrzucamy sesje i uruchamiamy ponownie.',
       substeps: [
         {
-          label: '1. Sprawdź stan odpalonych procesów i usług (OpenRC na Gentoo):',
+          label: '1. Połączenie SSH z serwerem z przekazywaniem agenta kluczy (SSH Agent Forwarding):',
+          cmd: 'ssh -A root@10.1.137.100',
+          lang: 'bash'
+        },
+        {
+          label: '2. Przejście do głównego katalogu instalacji Marcel i inspekcja plików produkcyjnych:',
+          cmd: 'cd /home/lab/Marcel/\nls -l\n# Opcjonalnie: menedżer plików Midnight Commander\nmc',
+          lang: 'bash'
+        },
+        {
+          label: '3. Sprawdź stan odpalonych procesów i usług (OpenRC na Gentoo):',
           cmd: 'rc-status',
           lang: 'bash'
         },
         {
-          label: '2. Zaloguj się do bazy jako administrator <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">postgres</span> :',
+          label: '4. Zaloguj się do bazy jako administrator <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">postgres</span> :',
           cmd: 'psql -U postgres',
           lang: 'bash'
         },
         {
-          label: '3. Sprawdź aktywne połączenia (dokładnie tak jak robi to Adrian):',
+          label: '5. Sprawdź aktywne połączenia (dokładnie tak jak robi to Adrian):',
           cmd: "SELECT * FROM pg_stat_activity WHERE datname = 'centrum';",
           lang: 'sql'
         },
         {
-          label: '4. Ocena wyniku:',
+          label: '6. Ocena wyniku:',
           bullets: [
             '• Jeśli widzisz <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">(0 rows)</span> (lub ewentualnie procesy replikacji / <span style="background: #2a2215; color: #e3b341; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">walwriter</span> , które nie blokują DDL) <strong style="color: #ffffff;">➔ Masz czysto, przechodzisz od razu do KROKU 2.</strong>',
             '• Jeśli widzisz jakiekolwiek wiersze sesji aplikacyjnych <strong style="color: #ffffff;">➔ Połączenia muszą zostać natychmiast zrzucone.</strong>'
           ]
         },
         {
-          label: '5. Zatrzymanie procesu / usługi PostgreSQL (odcięcie połączeń przed aktualizacją):',
+          label: '7. Zatrzymanie procesu / usługi PostgreSQL (odcięcie połączeń przed aktualizacją):',
           items: [
             {
               sublabel: 'Dystrybucja Gentoo Linux (OpenRC):',
@@ -157,7 +167,7 @@
           ]
         },
         {
-          label: '6. Uruchomienie / restart procesu PostgreSQL po zrzuceniu sesji:',
+          label: '8. Uruchomienie / restart procesu PostgreSQL po zrzuceniu sesji:',
           items: [
             {
               sublabel: 'Uruchomienie PostgreSQL — Gentoo Linux (OpenRC):',
@@ -182,12 +192,22 @@
           ]
         },
         {
-          label: '7. Ponowna weryfikacja zerowej liczby połączeń po restarcie (Musi zwrócić: (0 rows)):',
+          label: '9. Ponowna weryfikacja zerowej liczby połączeń po restarcie (Musi zwrócić: (0 rows)):',
           cmd: "SELECT * FROM pg_stat_activity WHERE datname = 'centrum';",
           lang: 'sql'
         }
       ],
       commands: [
+        {
+          label: 'Logowanie do serwera bazy danych przez SSH z przekazywaniem agenta kluczy',
+          cmd: 'ssh -A root@10.1.137.100',
+          lang: 'bash'
+        },
+        {
+          label: 'Przejście do głównego katalogu produkcyjnego Marcel i weryfikacja plików',
+          cmd: 'cd /home/lab/Marcel/ && ls -l',
+          lang: 'bash'
+        },
         {
           label: 'Sprawdzenie stanu usług systemowych (Gentoo OpenRC)',
           cmd: 'rc-status',
@@ -245,6 +265,8 @@
         }
       ],
       checklistItems: [
+        'Zalogowano się na serwer z flagą SSH Agent Forwarding (ssh -A root@...)',
+        'Przejrzano katalog produkcyjny /home/lab/Marcel/ (Centrum.exe, *.key, mc)',
         'Wykonano komendę rc-status i sprawdzono stan odpalonych usług w systemie',
         'Zalogowano się do bazy jako administrator postgres i zweryfikowano brak połączeń',
         'Wykonano zapytanie do pg_stat_activity i potwierdzono wynik (0 rows)',
@@ -601,6 +623,30 @@
    * Baza Komend Ściągawki Terminalowej (Z filtrowaniem i 1-Click Copy)
    */
   const TERMINAL_COMMANDS = [
+    {
+      id: 'cmd_ssh_agent_forward',
+      category: '1. Diagnostyka Sesji & Restart PostgreSQL',
+      title: 'Bezpieczne logowanie SSH z przekazywaniem agenta (SSH Agent Forwarding)',
+      cmd: 'ssh -A root@10.1.137.100',
+      shell: 'bash (lokalny terminal)',
+      explanation: 'Logowanie do serwera bazy danych jako root. Flaga -A (Agent Forwarding) umożliwia późniejsze wykonywanie transferów scp i połączeń ssh bezpośrednio z tego serwera do satelitów Alab (Debian RDP, cza.marcele.pl) bez wpisywania haseł i bez kopiowania klucza prywatnego.'
+    },
+    {
+      id: 'cmd_cd_marcel_inspect',
+      category: '1. Diagnostyka Sesji & Restart PostgreSQL',
+      title: 'Przejście do głównego katalogu Marcel i weryfikacja zawartości (Centrum.exe, *.key)',
+      cmd: 'cd /home/lab/Marcel/ && ls -l',
+      shell: 'bash (root na serwerze)',
+      explanation: 'Główny folder instalacyjny LIS Marcel. Weryfikacja obecności pliku Centrum.exe, licencji (*.key), adresów (*.ip) oraz katalogów Serwis i Program.'
+    },
+    {
+      id: 'cmd_mc_file_manager',
+      category: '1. Diagnostyka Sesji & Restart PostgreSQL',
+      title: 'Uruchomienie menedżera plików Midnight Commander (mc)',
+      cmd: 'mc',
+      shell: 'bash (root na serwerze)',
+      explanation: 'Dwuokienkowy konsolowy menedżer plików używany przez Adriana Wojtkowskiego na nagraniu do szybkiej nawigacji po katalogach, edycji skryptów i kopiowania binarek.'
+    },
     {
       id: 'cmd_gentoo_rc_status',
       category: '1. Diagnostyka Sesji & Restart PostgreSQL',

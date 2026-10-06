@@ -138,6 +138,10 @@ const checkCmd = step1.commands.find(c => c.cmd.includes("SELECT * FROM pg_stat_
 assert.ok(checkCmd, "Krok 1 musi zawierać dokładne zapytanie: SELECT * FROM pg_stat_activity WHERE datname = 'centrum';");
 assert.ok(step1.adrianNote.includes('(0 rows)'), "Krok 1 musi tłumaczyć wymóg szybkiego sprawdzenia (0 rows)");
 
+// Logowanie SSH z agent forwarding (-A) (z nagrania Adriana Wojtkowskiego)
+assert.ok(step1.commands.some(c => c.cmd.includes('ssh -A root@')), 'Krok 1 musi zawierać logowanie ssh z flagą -A (Agent Forwarding)');
+assert.ok(step1.adrianNote.includes('-A') || step1.adrianNote.includes('ssh -A'), 'Krok 1 w notatce Adriana musi wyjaśniać użycie flagi -A do przekazywania agenta SSH');
+
 // Komenda rc-status
 assert.ok(step1.commands.some(c => c.cmd.includes('rc-status')), 'Krok 1 musi zawierać komendę rc-status do sprawdzenia procesów/usług');
 assert.ok(step1.adrianNote.includes('rc-status'), 'Krok 1 w notatce Adriana musi wyjaśniać użycie rc-status przed logowaniem');
@@ -223,6 +227,7 @@ assert.ok(container.innerHTML.includes('Adrian Wojtkowski'), 'HTML musi wskazywa
 
 const contentEl = document.getElementById('sop-subtab-content');
 assert.ok(contentEl.innerHTML.includes('Zaktualizowana Procedura Standardowa (SOP): Aktualizacja Bazy PostgreSQL i Centrum'), 'Podzakładka musi zawierać zaktualizowany nagłówek SOP');
+assert.ok(contentEl.innerHTML.includes('ssh -A root@'), 'Wyjście procedury musi zawierać polecenie ssh -A root@');
 assert.ok(contentEl.innerHTML.includes('rc-status'), 'Wyjście procedury musi zawierać polecenie rc-status');
 assert.ok(contentEl.innerHTML.includes('>bash</span>') && contentEl.innerHTML.includes('>sql</span>'), 'Wyjście procedury musi renderować nowoczesne etykiety bloków kodu bash oraz sql');
 assert.ok(contentEl.innerHTML.includes('Quality Gates'), 'Wyjście procedury musi zawierać bramki jakościowe Quality Gates');
