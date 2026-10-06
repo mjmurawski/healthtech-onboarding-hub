@@ -415,7 +415,7 @@ const SYSTEMS_KB = {
                     { action: 'Przetestuj wykonanie w trybie bezpiecznym dry-run (--check)', cmd: 'ansible-playbook -i inventory/hosts site.yml --check --diff' }
                 ],
                 sqlQueries: [
-                    { label: 'Weryfikacja aktywnych połączeń bazy po przerwaniu zadania', sql: 'SELECT pid, usename, client_addr, state, query FROM pg_stat_activity WHERE state != \'idle\' LIMIT 10;', params: [] }
+                    { label: 'Weryfikacja aktywnych połączeń bazy centrum (Zero-Connection Check)', sql: 'SELECT * FROM pg_stat_activity WHERE datname = \'centrum\';', params: [] }
                 ],
                 safetyNote: 'Nigdy nie ignoruj błędu poprzez ignore_errors: true na produkcji szpitalnej bez dokładnej analizy przyczyny źródłowej!'
             },
