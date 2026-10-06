@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # Główny serwer bazodanowy LIS Marcel (PostgreSQL + Wine + struktura /home/lab/marcel)
+  marcel-db:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: marcel-db-sandbox
+    hostname: marcel-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: lab
+      POSTGRES_USER: postgres
+      POSTGRES_DB: centrum
+    volumes:
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ./mock-update:/home/lab/marcel/service/532_przed_zmianami
+    networks:
+      - marcel-net
+
+  # Serwer satelitarny Alab (Debian RDP / CZA bez Wine do testów przesyłania klucza .key)
+  satellite-rdp:
+    image: debian:bullseye-slim
+    container_name: satellite-rdp-sandbox
+    hostname: satellite-rdp
+    command: >
+      bash -c "apt-get update && apt-get install -y openssh-server sudo &&
+               useradd -m -s /bin/bash lab &&
+               echo 'lab:lab' | chpasswd &&
+               mkdir -p /home/lab/marcel &&
+               touch /home/lab/marcel/centrum.key &&
+               echo 'KLUCZ_LICENCJI_SATELITY_RDP_ALAB_2026' > /home/lab/marcel/centrum.key &&
+               chown -R lab:lab /home/lab/marcel &&
+               service ssh start && tail -f /dev/null"
+    networks:
+      - marcel-net
+
+networks:
+  marcel-net:
+    driver: bridge

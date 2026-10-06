@@ -535,6 +535,9 @@
             <button class="btn btn-sm ${sopState.activeSubTab === 'peripherals' ? 'btn-primary' : 'btn-secondary'}" data-sop-subtab="peripherals">
               🛡️ 4. Peryferia Szpitalne (Usługi do Zatrzymania)
             </button>
+            <button class="btn btn-sm ${sopState.activeSubTab === 'sandbox' ? 'btn-primary' : 'btn-secondary'}" data-sop-subtab="sandbox">
+              🧪 5. Laboratorium SRE (Sandbox Docker &amp; WSL2)
+            </button>
           </div>
         </div>
 
@@ -629,6 +632,8 @@
       renderBloatTab(content);
     } else if (sopState.activeSubTab === 'peripherals') {
       renderPeripheralsTab(content);
+    } else if (sopState.activeSubTab === 'sandbox') {
+      renderSandboxTab(content);
     }
   }
 
@@ -1111,6 +1116,206 @@ ALTER DATABASE centrum_skurczona RENAME TO centrum;
 
       <div>
         ${cardsHtml}
+      </div>
+    `;
+  }
+
+  /**
+   * 5. PODZAKŁADKA: LOKALNE LABORATORIUM SRE (SANDBOX DOCKER & WSL2)
+   */
+  function renderSandboxTab(container) {
+    container.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+        
+        <!-- Karta wprowadzenia do Sandboxa -->
+        <div class="card" style="border-left: 4px solid var(--accent-teal);">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+            <span style="font-size: 2rem;">🧪</span>
+            <div>
+              <h3 style="margin: 0;">Lokalny Poligon Doświadczalny SRE (Sandbox)</h3>
+              <div style="font-size: 0.82rem; color: var(--text-secondary);">
+                Zasada SRE: <em>Nigdy nie ucz się procedury na produkcji szpitalnej! Przetestuj każdy krok w 100% bezpiecznym środowisku lokalnym.</em>
+              </div>
+            </div>
+          </div>
+          <p style="font-size: 0.88rem; color: var(--text-primary); margin: 0; line-height: 1.6;">
+            Na Twoim komputerze z systemem Windows przygotowaliśmy gotowe pliki środowiska testowego w katalogu <code>sandbox/</code>. 
+            Pozwala ono odwzorować pełną architekturę LIS Marcel: bazę danych <strong>centrum</strong> (PostgreSQL), tabelę <strong>wersja</strong> z historycznymi wpisami, strukturę folderów <code>/home/lab/marcel/service/</code>, użytkownika <code>lab:users</code>, a także drugi serwer udający satelitę terminalową RDP Alab bez Wine!
+          </p>
+        </div>
+
+        <!-- 2 Metody uruchomienia -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+          
+          <!-- Metoda 1: Docker Compose -->
+          <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; border-top: 3px solid var(--accent-cyan);">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h4 style="margin: 0; color: var(--accent-cyan);">🐳 Metoda 1: Docker &amp; Docker Compose</h4>
+                <span class="badge" style="background: rgba(0, 180, 216, 0.2); color: var(--accent-cyan); font-size: 0.72rem;">Zalecane SRE (1 Komenda)</span>
+              </div>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 12px;">
+                Wymaga Docker Desktop. Tworzy dwa izolowane kontenery: <code>marcel-db-sandbox</code> (PostgreSQL 14 + Wine) oraz <code>satellite-rdp-sandbox</code> (Debian bez Wine).
+              </p>
+
+              <div style="background: var(--bg-input); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">Start środowiska w PowerShell / Bash:</span>
+                  <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('sb-docker-up')" style="font-size: 0.7rem; padding: 2px 6px;">📋 Kopiuj</button>
+                </div>
+                <pre style="margin: 0; background: transparent; padding: 0;"><code id="sb-docker-up" style="font-family: var(--font-mono); font-size: 0.82rem; color: #a5d6ff;">cd sandbox
+docker compose up -d</code></pre>
+              </div>
+
+              <div style="background: var(--bg-input); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">Wejście do konsoli jako użytkownik lab:</span>
+                  <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('sb-docker-exec')" style="font-size: 0.7rem; padding: 2px 6px;">📋 Kopiuj</button>
+                </div>
+                <pre style="margin: 0; background: transparent; padding: 0;"><code id="sb-docker-exec" style="font-family: var(--font-mono); font-size: 0.82rem; color: #a5d6ff;">docker exec -it -u lab marcel-db-sandbox bash</code></pre>
+              </div>
+            </div>
+
+            <div style="margin-top: 14px; font-size: 0.75rem; color: var(--text-muted);">
+              🔄 Reset środowiska do zera: <code>docker compose down -v &amp;&amp; docker compose up -d</code>
+            </div>
+          </div>
+
+          <!-- Metoda 2: WSL2 na Windows -->
+          <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; border-top: 3px solid var(--accent-amber);">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h4 style="margin: 0; color: var(--accent-amber);">🐧 Metoda 2: WSL2 (Ubuntu / Debian)</h4>
+                <span class="badge" style="background: rgba(255, 183, 3, 0.2); color: var(--accent-amber); font-size: 0.72rem;">Natywny Linux na Windows</span>
+              </div>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 12px;">
+                Dla osób bez Docker Desktop. Działa bezpośrednio w Windows Subsystem for Linux (WSL2) z pełnym dostępem do systemd i psql.
+              </p>
+
+              <div style="background: var(--bg-input); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">Krok 1: Instalacja PostgreSQL i Wine w Ubuntu:</span>
+                  <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('sb-wsl-install')" style="font-size: 0.7rem; padding: 2px 6px;">📋 Kopiuj</button>
+                </div>
+                <pre style="margin: 0; background: transparent; padding: 0;"><code id="sb-wsl-install" style="font-family: var(--font-mono); font-size: 0.82rem; color: #a5d6ff;">sudo apt update &amp;&amp; sudo apt install -y postgresql postgresql-contrib
+sudo dpkg --add-architecture i386
+sudo apt update &amp;&amp; sudo apt install -y wine wine32 wine64</code></pre>
+              </div>
+
+              <div style="background: var(--bg-input); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">Krok 2: Konfiguracja usera lab i struktury Marcela:</span>
+                  <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('sb-wsl-user')" style="font-size: 0.7rem; padding: 2px 6px;">📋 Kopiuj</button>
+                </div>
+                <pre style="margin: 0; background: transparent; padding: 0;"><code id="sb-wsl-user" style="font-family: var(--font-mono); font-size: 0.82rem; color: #a5d6ff;">sudo useradd -m -s /bin/bash -g users lab
+sudo mkdir -p /home/lab/marcel/service
+sudo chown -R lab:users /home/lab
+sudo -u postgres psql -c "CREATE USER lab WITH SUPERUSER PASSWORD 'lab';"
+sudo -u postgres psql -c "CREATE DATABASE centrum OWNER lab;"</code></pre>
+              </div>
+            </div>
+
+            <div style="margin-top: 14px; font-size: 0.75rem; color: var(--text-muted);">
+              💡 Baza centrum zostanie zainicjalizowana z prawami użytkownika lab.
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Ćwiczenia Praktyczne SRE Krok po Kroku -->
+        <div class="card">
+          <h4 style="margin-top: 0; color: var(--accent-teal);">🎯 4 Ćwiczenia Praktyczne do Wykonania w Piaskownicy</h4>
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+            Wykonaj poniższe 4 scenariusze wewnątrz kontenera / WSL, aby nabyć pamięć mięśniową przed prawdziwym oknem serwisowym.
+          </p>
+
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            
+            <!-- Ćwiczenie 1 -->
+            <div style="background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <strong style="color: var(--accent-cyan); font-size: 0.9rem;">Ćwiczenie 1: Symulacja wiszącej transakcji &amp; Test zapytania Adriana (0 rows)</strong>
+                <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('ex-1-cmd')" style="font-size: 0.75rem; padding: 2px 8px;">📋 Kopiuj Komendy</button>
+              </div>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0 0 8px 0;">
+                W oknie 1 uruchamiasz wiszącą transakcję (np. laborant zostawił otwarty program). W oknie 2 sprawdzasz czy zapytanie Adriana wykryje brak zerowych połączeń:
+              </p>
+              <pre style="margin: 0; background: transparent; padding: 0;"><code id="ex-1-cmd" style="font-family: var(--font-mono); font-size: 0.83rem; color: #a5d6ff;"># W oknie A (symulacja zawieszonej sesji laboranta):
+psql -U lab -d centrum -c "SELECT pg_sleep(120);"
+
+# W oknie B (Twoja kontrola SRE przed migracją):
+psql -U postgres -d centrum -c "SELECT * FROM pg_stat_activity WHERE datname = 'centrum';"
+# Zobaczysz aktywne połączenie! Nie ma (0 rows). Nie wolno zaczynać aktualizacji!</code></pre>
+            </div>
+
+            <!-- Ćwiczenie 2 -->
+            <div style="background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <strong style="color: var(--accent-amber); font-size: 0.9rem;">Ćwiczenie 2: Trik Adriana z wycięciem INSERT INTO wersja w 5.2.1.sql</strong>
+                <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('ex-2-cmd')" style="font-size: 0.75rem; padding: 2px 8px;">📋 Kopiuj Komendy</button>
+              </div>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0 0 8px 0;">
+                Sprawdź dlaczego skrypt wywala błąd bez triku Adriana i jak jedna komenda <code>sed</code> rozwiązuje problem:
+              </p>
+              <pre style="margin: 0; background: transparent; padding: 0;"><code id="ex-2-cmd" style="font-family: var(--font-mono); font-size: 0.83rem; color: #a5d6ff;">cd /home/lab/marcel/service/532_przed_zmianami/
+
+# 1. Sprawdź zawartość pierwszego pliku SQL:
+head -n 2 5.2.1.sql
+
+# 2. Wycięcie kolizyjnej pierwszej linijki INSERT INTO wersja (Trik Adriana):
+sed -i '1{/INSERT INTO wersja/d}' 5.2.1.sql
+
+# 3. Uruchomienie aktualizacji:
+chmod +x update.sh
+./update.sh
+# Wynik: Baza zaktualizowana bezbłędnie do wersji 5.3.2!</code></pre>
+            </div>
+
+            <!-- Ćwiczenie 3 -->
+            <div style="background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <strong style="color: #8338ec; font-size: 0.9rem;">Ćwiczenie 3: Wymiana centrum.exe, uprawnienia lab:users &amp; Wine kgp.exe</strong>
+                <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('ex-3-cmd')" style="font-size: 0.75rem; padding: 2px 8px;">📋 Kopiuj Komendy</button>
+              </div>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0 0 8px 0;">
+                Przećwicz podstawienie binarki, nadanie uprawnień i podpisanie licencji (likwidacja ekranu czerwonej czaszki):
+              </p>
+              <pre style="margin: 0; background: transparent; padding: 0;"><code id="ex-3-cmd" style="font-family: var(--font-mono); font-size: 0.83rem; color: #a5d6ff;">cp centrum.exe /home/lab/marcel/centrum.exe
+cp kgp.exe /home/lab/marcel/kgp.exe
+cd /home/lab/marcel/
+
+chown lab:users centrum.exe
+chmod 755 centrum.exe
+
+# Podpisanie licencji (symulator / Wine):
+./kgp.exe -a centrum.exe # lub: wine kgp.exe -a centrum.exe
+ls -la centrum.exe centrum.key</code></pre>
+            </div>
+
+            <!-- Ćwiczenie 4 -->
+            <div style="background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <strong style="color: #06d6a0; font-size: 0.9rem;">Ćwiczenie 4: Transfer klucza satelity RDP (Alab Workflow)</strong>
+                <button class="btn btn-secondary btn-sm" onclick="window.copyPgSopText('ex-4-cmd')" style="font-size: 0.75rem; padding: 2px 8px;">📋 Kopiuj Komendy</button>
+              </div>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0 0 8px 0;">
+                Przetestuj procedurę dla serwera RDP (który nie ma Wine):
+              </p>
+              <pre style="margin: 0; background: transparent; padding: 0;"><code id="ex-4-cmd" style="font-family: var(--font-mono); font-size: 0.83rem; color: #a5d6ff;"># Pobranie klucza z satelity:
+scp lab@satellite-rdp:/home/lab/marcel/centrum.key /home/lab/marcel/satellite_keys/
+
+# Podpisanie na maszynie z Wine:
+cd /home/lab/marcel/satellite_keys/
+cp /home/lab/marcel/centrum.exe .
+../kgp.exe -a centrum.exe
+
+# Odesłanie podpisanego zestawu:
+scp centrum.exe centrum.key lab@satellite-rdp:/home/lab/marcel/</code></pre>
+            </div>
+
+          </div>
+        </div>
+
       </div>
     `;
   }

@@ -234,4 +234,20 @@ assert.ok(appJsContent.includes('renderPgUpdateSopModule'), 'app.js musi wywoły
 assert.ok(appJsContent.includes('data-switch-tab="tab-pg-update-sop"'), 'app.js musi zawierać kafelek szybkiego dostępu na pulpicie dla SOP');
 console.log('✅ INTEGRACJA PROJEKTU: Nawigacja, panel, skrypt i pulpit są w 100% zintegrowane');
 
-console.log('\n🎉 WSZYSTKIE 11 TESTÓW MODUŁU AKTUALIZACJI POSTGRESQL & CENTRUM (SOP) ZALICZONE Z SUKCESEM (100%)!\n');
+// === TEST 12: Weryfikacja Podzakładki i Plików Sandboxa (Lokalne Środowisko SRE) ===
+console.log('\n=== TEST 12: Weryfikacja Plików i Podzakładki Sandboxa SRE ===');
+assert.ok(container.innerHTML.includes('data-sop-subtab="sandbox"'), 'Pasek zakładek musi zawierać przycisk sandbox');
+assert.ok(container.innerHTML.includes('Laboratorium SRE'), 'Pasek zakładek musi zawierać etykietę Laboratorium SRE');
+
+// Weryfikacja fizycznych plików w katalogu sandbox/
+const sandboxDir = path.join(__dirname, 'sandbox');
+assert.ok(fs.existsSync(path.join(sandboxDir, 'docker-compose.yml')), 'Plik sandbox/docker-compose.yml musi istnieć');
+assert.ok(fs.existsSync(path.join(sandboxDir, 'Dockerfile')), 'Plik sandbox/Dockerfile musi istnieć');
+assert.ok(fs.existsSync(path.join(sandboxDir, 'init-db.sql')), 'Plik sandbox/init-db.sql musi istnieć');
+assert.ok(fs.existsSync(path.join(sandboxDir, 'README.md')), 'Plik sandbox/README.md musi istnieć');
+assert.ok(fs.existsSync(path.join(sandboxDir, 'mock-update', 'update.sh')), 'Plik sandbox/mock-update/update.sh musi istnieć');
+assert.ok(fs.existsSync(path.join(sandboxDir, 'mock-update', '5.2.1.sql')), 'Plik sandbox/mock-update/5.2.1.sql musi istnieć');
+assert.ok(fs.existsSync(path.join(sandboxDir, 'mock-update', 'kgp.exe')), 'Plik sandbox/mock-update/kgp.exe musi istnieć');
+console.log('✅ SANDBOX FILES: Wszystkie pliki poligonu doświadczalnego SRE istnieją i są kompletne');
+
+console.log('\n🎉 WSZYSTKIE 12 TESTÓW MODUŁU AKTUALIZACJI POSTGRESQL & CENTRUM (SOP) ZALICZONE Z SUKCESEM (100%)!\n');

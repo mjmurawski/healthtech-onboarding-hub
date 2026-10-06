@@ -1,0 +1,22 @@
+#!/bin/bash
+# ====================================================================
+# Mock generatora kluczy kgp.exe (symulator działania Wine i kgp.exe)
+# ====================================================================
+
+if [ "$1" = "-a" ] && [ -n "$2" ]; then
+    TARGET="$2"
+    echo ">> [MOCK kgp.exe] Wykryto parametr -a (Aktywacja bitu licencji dla $TARGET)"
+    echo ">> [MOCK kgp.exe] Modyfikacja nagłówka binarnego PE w pliku $TARGET..."
+    # Aktualizacja timestampu i dodanie sygnatury
+    touch "$TARGET"
+    
+    KEY_NAME="centrum.key"
+    echo ">> [MOCK kgp.exe] Aktualizacja pliku licencji $KEY_NAME..."
+    echo "LICENCE_VALID_SIGNATURE_$(date +%s)_ALAB_MARCEL" > "$KEY_NAME"
+    
+    echo ">> [MOCK kgp.exe] [SUKCES] Binarka $TARGET podpisana poprawnie! Ekran 'czerwona czaszka' nie pojawi się."
+    exit 0
+else
+    echo "Błąd składni kgp.exe! Wymagane wywołanie: wine kgp.exe -a centrum.exe"
+    exit 1
+fi
